@@ -21,6 +21,7 @@ static struct config {
     bool     u_latency;
     bool     dynamic;
     bool     record_all_responses;
+    bool     raw;
     char    *host;
     char    *script;
     SSL_CTX *ctx;
@@ -65,6 +66,7 @@ static void usage() {
            "                           batches of pipelined ops   \n"
            "                           (as opposed to each op)    \n"
            "    -v, --version          Print version details      \n"
+           "        --raw              No human-readable unit     \n"
            "    -R, --rate        <T>  work rate (throughput)     \n"
            "                           in requests/sec (total)    \n"
            "                           [Required Parameter]       \n"
@@ -158,7 +160,7 @@ int main(int argc, char **argv) {
     sigfillset(&sa.sa_mask);
     sigaction(SIGINT, &sa, NULL);
 
-    char *time = format_time_s(cfg.duration);
+    char *time = format_time_s(cfg.duration, cfg.raw);
     printf("Running %s test @ %s\n", time, url);
     printf("  %"PRIu64" threads and %"PRIu64" connections\n",
             cfg.threads, cfg.connections);
@@ -222,10 +224,10 @@ int main(int argc, char **argv) {
         printf("----------------------------------------------------------\n");
     }
 
-    char *runtime_msg = format_time_us(runtime_us);
+    char *runtime_msg = format_time_us(runtime_us, cfg.raw);
 
     printf("  %"PRIu64" requests in %s, %sB read\n",
-            complete, runtime_msg, format_binary(bytes));
+            complete, runtime_msg, format_binary(bytes, cfg.raw));
     if (errors.connect || errors.read || errors.write || errors.timeout) {
         printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
                errors.connect, errors.read, errors.write, errors.timeout);
@@ -236,7 +238,7 @@ int main(int argc, char **argv) {
     }
 
     printf("Requests/sec: %9.2Lf\n", req_per_s);
-    printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+    printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s,cfg.raw));
 
     if (script_has_done(L)) {
         script_summary(L, runtime_us, complete, bytes);
@@ -704,6 +706,7 @@ static struct option longopts[] = {
     { "help",           no_argument,       NULL, 'h' },
     { "version",        no_argument,       NULL, 'v' },
     { "rate",           required_argument, NULL, 'R' },
+    { "raw",         no_argument,       NULL, 'r' },
     { NULL,             0,                 NULL,  0  }
 };
 
@@ -715,6 +718,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->raw         = 0;
     cfg->rate        = 0;
     cfg->record_all_responses = true;
 
@@ -749,6 +753,8 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 if (scan_time(optarg, &cfg->timeout)) return -1;
                 cfg->timeout *= 1000;
                 break;
+            case 'r':
+                cfg->raw = 1;
             case 'R':
                 if (scan_metric(optarg, &cfg->rate)) return -1;
                 break;
@@ -792,8 +798,8 @@ static void print_stats_header() {
     printf("  Thread Stats%6s%11s%8s%12s\n", "Avg", "Stdev", "Max", "+/- Stdev");
 }
 
-static void print_units(long double n, char *(*fmt)(long double), int width) {
-    char *msg = fmt(n);
+static void print_units(long double n, char *(*fmt)(long double,int), int width) {
+    char *msg = fmt(n,cfg.raw);
     int len = strlen(msg), pad = 2;
 
     if (isalpha(msg[len-1])) pad--;
@@ -805,7 +811,7 @@ static void print_units(long double n, char *(*fmt)(long double), int width) {
     free(msg);
 }
 
-static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
+static void print_stats(char *name, stats *stats, char *(*fmt)(long double,int)) {
     uint64_t max = stats->max;
     long double mean  = stats_summarize(stats);
     long double stdev = stats_stdev(stats, mean);

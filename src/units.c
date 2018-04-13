@@ -38,16 +38,18 @@ units metric_units = {
     .units = { "k", "M", "G", "T", "P", NULL }
 };
 
-static char *format_units(long double n, units *m, int p) {
+static char *format_units(long double n, units *m, int p, int raw) {
     long double amt = n, scale;
     char *unit = m->base;
     char *msg = NULL;
 
     scale = m->scale * 0.85;
 
-    for (int i = 0; m->units[i+1] && amt >= scale; i++) {
-        amt /= m->scale;
-        unit = m->units[i];
+    if (raw) {
+        for (int i = 0; m->units[i+1] && amt >= scale; i++) {
+            amt /= m->scale;
+            unit = m->units[i];
+        }
     }
 
     aprintf(&msg, "%.*Lf%s", p, amt, unit);
@@ -74,25 +76,25 @@ static int scan_units(char *s, uint64_t *n, units *m) {
     return 0;
 }
 
-char *format_binary(long double n) {
-    return format_units(n, &binary_units, 2);
+char *format_binary(long double n, int raw) {
+    return format_units(n, &binary_units, 2, raw);
 }
 
-char *format_metric(long double n) {
-    return format_units(n, &metric_units, 2);
+char *format_metric(long double n, int raw) {
+    return format_units(n, &metric_units, 2, raw);
 }
 
-char *format_time_us(long double n) {
+char *format_time_us(long double n, int raw) {
     units *units = &time_units_us;
-    if (n >= 1000000.0) {
+    if (n >= 1000000.0 && !raw) {
         n /= 1000000.0;
         units = &time_units_s;
     }
-    return format_units(n, units, 2);
+    return format_units(n, units, 2, raw);
 }
 
-char *format_time_s(long double n) {
-    return format_units(n, &time_units_s, 0);
+char *format_time_s(long double n, int raw) {
+    return format_units(n, &time_units_s, 0, raw);
 }
 
 int scan_metric(char *s, uint64_t *n) {
