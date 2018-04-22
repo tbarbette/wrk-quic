@@ -45,7 +45,7 @@ static char *format_units(long double n, units *m, int p, int raw) {
 
     scale = m->scale * 0.85;
 
-    if (raw) {
+    if (!raw) {
         for (int i = 0; m->units[i+1] && amt >= scale; i++) {
             amt /= m->scale;
             unit = m->units[i];
