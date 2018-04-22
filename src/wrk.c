@@ -755,6 +755,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 'r':
                 cfg->raw = 1;
+                break;
             case 'R':
                 if (scan_metric(optarg, &cfg->rate)) return -1;
                 break;
