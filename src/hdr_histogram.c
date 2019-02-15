@@ -545,8 +545,10 @@ bool hdr_percentile_iter_next(struct hdr_percentile_iter* percentiles)
 
             int64_t half_distance = (int64_t) pow(2, (int64_t) (log(100 / (100.0 - (percentiles->percentile_to_iterate_to))) / log(2)) + 1);
             int64_t percentile_reporting_ticks = percentiles->ticks_per_half_distance * half_distance;
-            percentiles->percentile_to_iterate_to += 100.0 / percentile_reporting_ticks;
-
+            double step =  100.0 / percentile_reporting_ticks;
+            if (step > 1)
+                step = 1;
+            percentiles->percentile_to_iterate_to += step;
             return true;
         }
     }
