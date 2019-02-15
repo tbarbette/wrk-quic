@@ -212,14 +212,14 @@ int main(int argc, char **argv) {
 
     if (cfg.latency) {
         print_hdr_latency(latency_histogram,
-                "Recorded Latency");
+                "Recorded Latency", cfg.raw);
         printf("----------------------------------------------------------\n");
     }
 
     if (cfg.u_latency) {
         printf("\n");
         print_hdr_latency(u_latency_histogram,
-                "Uncorrected Latency (measured without taking delayed starts into account)");
+                "Uncorrected Latency (measured without taking delayed starts into account)", cfg.raw);
         printf("----------------------------------------------------------\n");
     }
 
@@ -816,7 +816,7 @@ static void print_units(long double n, char *(*fmt)(long double,int), int width)
     width -= pad;
 
     if (cfg.raw)
-        printf("%s%s", msg, "  ");
+        printf(" %s ", msg);
     else
         printf("%*.*s%.*s", width, width, msg, pad, "  ");
 
@@ -842,13 +842,16 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double,int))
     }
 }
 
-static void print_hdr_latency(struct hdr_histogram* histogram, const char* description) {
+static void print_hdr_latency(struct hdr_histogram* histogram, const char* description, bool raw) {
     long double percentiles[] = { 50.0, 75.0, 90.0, 99.0, 99.9, 99.99, 99.999, 100.0};
     printf("  Latency Distribution (HdrHistogram - %s)\n", description);
     for (size_t i = 0; i < sizeof(percentiles) / sizeof(long double); i++) {
         long double p = percentiles[i];
         int64_t n = hdr_value_at_percentile(histogram, p);
-        printf("%7.3Lf%%", p);
+        if (raw)
+            printf("%Lf%%", p);
+        else
+            printf("%7.3Lf%%", p);
         print_units(n, format_time_us, 10);
         printf("\n");
     }
