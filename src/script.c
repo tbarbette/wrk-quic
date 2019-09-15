@@ -157,6 +157,21 @@ void script_request(lua_State *L, char **buf, size_t *len) {
     lua_pop(L, pop);
 }
 
+void script_bind(lua_State *L, char **buf, size_t *len) {
+    int pop = 1;
+    lua_getglobal(L, "bind");
+    if (!lua_isfunction(L, -1)) {
+        lua_getglobal(L, "wrk");
+        lua_getfield(L, -1, "bind");
+        pop += 2;
+    }
+    lua_call(L, 0, 1);
+    const char *str = lua_tolstring(L, -1, len);
+    *buf = realloc(*buf, *len);
+    memcpy(*buf, str, *len);
+    lua_pop(L, pop);
+}
+
 void script_response(lua_State *L, int status, buffer *headers, buffer *body) {
     lua_getglobal(L, "response");
     lua_pushinteger(L, status);

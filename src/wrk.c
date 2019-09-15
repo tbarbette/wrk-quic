@@ -17,6 +17,7 @@ static struct config {
     uint64_t pipeline;
     uint64_t rate;
     uint64_t delay_ms;
+    in_addr_t bind;
     bool     latency;
     bool     u_latency;
     bool     dynamic;
@@ -67,6 +68,8 @@ static void usage() {
            "                           (as opposed to each op)    \n"
            "    -v, --version          Print version details      \n"
            "        --raw              No human-readable unit     \n"
+           "    -b, --bind       <IP>  Establish connection from a\n"
+           "                             given address            \n"
            "    -R, --rate        <T>  work rate (throughput)     \n"
            "                           in requests/sec (total)    \n"
            "                           [Required Parameter]       \n"
@@ -275,6 +278,7 @@ void *thread_main(void *arg) {
 
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
         c->thread     = thread;
+        c->bind.s_addr    = cfg.bind;
         c->ssl        = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
         c->request    = request;
         c->length     = length;
@@ -310,6 +314,18 @@ static int connect_socket(thread *thread, connection *c) {
 
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+    if (c->bind.s_addr != 0) {
+        struct sockaddr_in localaddr;
+        localaddr.sin_family = AF_INET;
+        localaddr.sin_addr = c->bind;
+        localaddr.sin_port = 0;  // Any local port will do
+        int err = bind(fd, (struct sockaddr *)&localaddr, sizeof(localaddr));
+        if (err != 0) {
+            printf("Could not bind to given address : errno %d!\n",errno);
+            goto error;
+        }
+    }
 
     if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
         if (errno != EINPROGRESS) goto error;
@@ -706,6 +722,7 @@ static struct option longopts[] = {
     { "latency",        no_argument,       NULL, 'L' },
     { "u_latency",      no_argument,       NULL, 'U' },
     { "batch_latency",  no_argument,       NULL, 'B' },
+    { "bind",        required_argument, NULL, 'b' },
     { "timeout",        required_argument, NULL, 'T' },
     { "help",           no_argument,       NULL, 'h' },
     { "version",        no_argument,       NULL, 'v' },
@@ -723,10 +740,11 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
     cfg->raw         = 0;
+    cfg->bind        = 0;
     cfg->rate        = 0;
     cfg->record_all_responses = true;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:R:LUBrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:b:T:R:LUBrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -745,6 +763,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 'L':
                 cfg->latency = true;
+                break;
+            case 'b':
+                cfg->bind = inet_addr(optarg);
                 break;
             case 'B':
                 cfg->record_all_responses = false;
