@@ -265,11 +265,11 @@ void *thread_main(void *arg) {
     hdr_init(1, MAX_LATENCY, 3, &thread->latency_histogram);
     hdr_init(1, MAX_LATENCY, 3, &thread->u_latency_histogram);
 
-    char *request = NULL;
-    size_t length = 0;
+    char *request,user = NULL;
+    size_t length,user_len = 0;
 
     if (!cfg.dynamic) {
-        script_request(thread->L, &request, &length);
+        script_request(thread->L, &request, &length, &user, &user_len);
     }
 
     double throughput = (thread->throughput / 1000000.0) / thread->connections;
@@ -516,9 +516,10 @@ static int response_complete(http_parser *parser) {
         thread->errors.status++;
     }
 
+    printf("Request was %s",c->request);
     if (c->headers.buffer) {
         *c->headers.cursor++ = '\0';
-        script_response(thread->L, status, &c->headers, &c->body);
+        script_response(thread->L, status, &c->headers, &c->body, c->user, c->user_len);
         c->state = FIELD;
     }
 
@@ -635,7 +636,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     }
 
     if (!c->written && cfg.dynamic) {
-        script_request(thread->L, &c->request, &c->length);
+        script_request(thread->L, &c->request, &c->length, &c->user, &c->user_len);
     }
 
     char  *buf = c->request + c->written;
