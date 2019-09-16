@@ -516,7 +516,6 @@ static int response_complete(http_parser *parser) {
         thread->errors.status++;
     }
 
-    printf("Request was %s",c->request);
     if (c->headers.buffer) {
         *c->headers.cursor++ = '\0';
         script_response(thread->L, status, &c->headers, &c->body, c->user, c->user_len);

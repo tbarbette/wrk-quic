@@ -144,17 +144,20 @@ void script_init(lua_State *L, thread *t, int argc, char **argv) {
 
 void script_request(lua_State *L, char **buf, size_t *len, char** user, size_t *user_len) {
     int pop = 1;
+    int level = lua_gettop(L);
     lua_getglobal(L, "request");
     if (!lua_isfunction(L, -1)) {
         lua_getglobal(L, "wrk");
         lua_getfield(L, -1, "request");
         pop += 2;
     }
-    lua_call(L, 0, 2);
+    lua_call(L, 0, LUA_MULTRET);
+    int nresults = lua_gettop(L) - level;
+    if (nresults == 2) {
     const char *str_user = lua_tolstring(L, -1, user_len);
     *user = realloc(*user, *user_len);
     memcpy(*user, str_user, *user_len);
-    lua_pop(L, pop);
+    lua_pop(L, pop);}
 
     const char *str = lua_tolstring(L, -1, len);
     *buf = realloc(*buf, *len);
@@ -190,7 +193,7 @@ void script_response(lua_State *L, int status, buffer *headers, buffer *body, ch
     }
 
     lua_pushlstring(L, body->buffer, body->cursor - body->buffer);
-    lua_pushlstring(L, request, request + len);
+    lua_pushlstring(L, request,  len);
     lua_call(L, 4, 0);
 
     buffer_reset(headers);
