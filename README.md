@@ -1,7 +1,9 @@
 # wrk2
-[![Build Status](https://travis-ci.com/giltene/wrk2.svg?branch=master)](https://travis-ci.com/giltene/wrk2) [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/giltene/wrk2?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Build Status](https://travis-ci.com/tbarbette/wrk2.svg?branch=master)](https://travis-ci.com/tbarbette/wrk2)
 
   **a HTTP benchmarking tool based mostly on wrk**
+
+  This is Tom Barbette's slightly modified version of [http://github.com/gilene/wrk2](wrk2)
 
   wrk2 is wrk modifed to produce a constant throughput load, and
   accurate latency details to the high 9s (i.e. can produce
@@ -58,6 +60,11 @@
   An optional LuaJIT script can perform HTTP request generation, response
   processing, and custom reporting. Several example scripts are located in
   scripts/
+
+## Compilation
+
+    ./configure
+    make
 
 ## Basic Usage
 
