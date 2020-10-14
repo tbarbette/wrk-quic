@@ -41,7 +41,7 @@ function wrk.init(args)
       init(args)
    end
 
-   local req = wrk.format()
+   local req = wrk.format09()
    wrk.request = function()
       return req
    end
@@ -67,6 +67,21 @@ function wrk.format(method, path, headers, body)
 
    s[#s+1] = ""
    s[#s+1] = body or ""
+
+   return table.concat(s, "\r\n")
+end
+
+function wrk.format09(method, path, headers, body)
+   local method  = method  or wrk.method
+   local path    = path    or wrk.path
+   local headers = headers or wrk.headers
+   local body    = body    or wrk.body
+   local s       = {}
+
+   s[1] = string.format("%s %s", method, path)
+
+   s[#s+1] = ""
+   s[#s+1] = ""
 
    return table.concat(s, "\r\n")
 end

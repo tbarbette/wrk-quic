@@ -9,7 +9,8 @@
 typedef enum {
     OK,
     ERROR,
-    RETRY
+    RETRY,
+    AGAIN
 } status;
 
 struct sock {
@@ -18,6 +19,7 @@ struct sock {
     status (    *read)(connection *, size_t *);
     status (   *write)(connection *, char *, size_t, size_t *);
     size_t (*readable)(connection *);
+    void  (*writeable)(connection *, aeEventLoop *);
 };
 
 status sock_connect(connection *, char *);

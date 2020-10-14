@@ -7,10 +7,15 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <math.h>
+
+#include <picoquic.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <lua.h>
+#include <sys/time.h>
 
 #include "stats.h"
 #include "ae.h"
@@ -44,6 +49,7 @@ typedef struct {
     lua_State *L;
     errors errors;
     struct connection *cs;
+    picoquic_quic_t *quic;
 } thread;
 
 typedef struct {
@@ -60,7 +66,10 @@ typedef struct connection {
     } state;
     int fd;
     struct in_addr bind;
-    SSL *ssl;
+    union {
+            SSL *ssl;
+            picoquic_cnx_t* cnx;
+    };
     double throughput;
     double catch_up_throughput;
     uint64_t complete;
@@ -86,6 +95,69 @@ typedef struct connection {
     uint64_t latest_expected_start;
     uint64_t latest_connect;
     uint64_t latest_write;
+
 } connection;
+
+
+typedef int (*connect_t)(thread *thread, connection *c);
+typedef int (*reconnect_t)(thread *, connection *);
+
+typedef struct proto {
+   connect_t connect;
+   reconnect_t reconnect;
+} proto;
+
+
+struct http_parser_settings parser_settings;
+
+static uint64_t time_us() {
+    struct timespec t;
+    clock_gettime( CLOCK_MONOTONIC, &t) ;
+    return (t.tv_sec * 1000000) + (t.tv_nsec / 1000);
+}
+
+static uint64_t usec_to_next_send(connection *c) {
+    uint64_t now = time_us();
+
+    uint64_t next_start_time = c->thread_start + (c->complete / c->throughput);
+
+    bool send_now = true;
+
+    if (next_start_time > now) {
+        // We are on pace. Indicate caught_up and don't send now.
+        c->caught_up = true;
+        send_now = false;
+    } else {
+        // We are behind
+        if (c->caught_up) {
+            // This is the first fall-behind since we were last caught up
+            c->caught_up = false;
+            c->catch_up_start_time = now;
+            c->complete_at_catch_up_start = c->complete;
+        }
+
+        // Figure out if it's time to send, per catch up throughput:
+        uint64_t complete_since_catch_up_start =
+                c->complete - c->complete_at_catch_up_start;
+
+        next_start_time = c->catch_up_start_time +
+                (complete_since_catch_up_start / c->catch_up_throughput);
+
+        if (next_start_time > now) {
+            // Not yet time to send, even at catch-up throughout:
+            send_now = false;
+        }
+    }
+
+    if (send_now) {
+        c->latest_should_send_time = now;
+        c->latest_expected_start = next_start_time;
+    }
+
+    return send_now ? 0 : (next_start_time - now);
+}
+
+
+int delay_request(aeEventLoop *loop, long long id, void *data);
 
 #endif /* WRK_H */

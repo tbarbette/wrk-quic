@@ -28,8 +28,7 @@
 struct config;
 
 static void *thread_main(void *);
-static int connect_socket(thread *, connection *);
-static int reconnect_socket(thread *, connection *);
+
 
 static int calibrate(aeEventLoop *, long long, void *);
 static int sample_rate(aeEventLoop *, long long, void *);
@@ -51,7 +50,7 @@ static int parse_args(struct config *, char **, struct http_parser_url *, char *
 static char *copy_url_part(char *, struct http_parser_url *, enum http_parser_url_fields);
 static void print_stats_header(bool);
 static void print_stats(char *, stats *, char *(*)(long double,int));
-static void print_stats_latency(stats *, bool);
+//static void print_stats_latency(stats *, bool);
 static void print_hdr_latency(struct hdr_histogram*, const char*, bool);
 
 #endif /* MAIN_H */

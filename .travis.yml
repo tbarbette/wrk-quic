@@ -31,5 +31,5 @@ script:
   - export LD_LIBRARY_PATH=$(pwd)/usr/local/lib/:$LD_LIBRARY_PATH
   - ls usr/local/
   - ls usr/local/lib
-  - ./configure
+  - ./configure CFLAGS=-I$(pwd)/usr/local/include/
   - make

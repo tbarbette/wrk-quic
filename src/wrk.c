@@ -5,6 +5,8 @@
 #include "main.h"
 #include "hdr_histogram.h"
 #include "stats.h"
+#include <arpa/inet.h>
+#include "assert.h"
 
 // Max recordable latency of 1 day
 #define MAX_LATENCY 24L * 60 * 60 * 1000000
@@ -25,30 +27,95 @@ static struct config {
     bool     raw;
     char    *host;
     char    *script;
+    int     http_version;
+    proto   *proto;
     SSL_CTX *ctx;
 } cfg;
+
+#include "tcp.h"
+#include "quic.h"
 
 static struct {
     stats *requests;
     pthread_mutex_t mutex;
 } statistics;
 
-static struct sock sock = {
-    .connect  = sock_connect,
-    .close    = sock_close,
-    .read     = sock_read,
-    .write    = sock_write,
-    .readable = sock_readable
-};
-
-static struct http_parser_settings parser_settings = {
+struct http_parser_settings parser_settings = {
     .on_message_complete = response_complete
 };
+
+
+void stats_request_completed();
 
 static volatile sig_atomic_t stop = 0;
 
 static void handler(int sig) {
     stop = 1;
+};
+
+int delay_request(aeEventLoop *loop, long long id, void *data) {
+    connection* c = data;
+    uint64_t time_usec_to_wait = usec_to_next_send(c);
+    if (time_usec_to_wait) {
+        return round((time_usec_to_wait / 1000.0L) + 0.5); /* don't send, wait */
+    }
+    aeCreateFileEvent(c->thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
+    return AE_NOMORE;
+}
+
+static void sock_writeable(connection* c, aeEventLoop *loop) {
+    thread *thread = c->thread;
+
+    //If nothing is written in the connection, we'll wait
+    if (!c->written) {
+        uint64_t time_usec_to_wait = usec_to_next_send(c);
+        if (time_usec_to_wait) {
+            int msec_to_wait = round((time_usec_to_wait / 1000.0L) + 0.5);
+
+            // Not yet time to send. Delay:
+            aeDeleteFileEvent(loop, c->fd, AE_WRITABLE);
+            aeCreateTimeEvent(
+                    thread->loop, msec_to_wait, delay_request, c, NULL);
+            return;
+        }
+        c->latest_write = time_us();
+    }
+
+    if (!c->written && cfg.dynamic) {
+        script_request(thread->L, &c->request, &c->length, &c->user, &c->user_len);
+    }
+
+    char  *buf = c->request + c->written;
+    size_t len = c->length  - c->written;
+    size_t n;
+
+    if (!c->written) {
+        c->start = time_us();
+        if (!c->has_pending) {
+            c->actual_latency_start = c->start;
+            c->complete_at_last_batch_start = c->complete;
+            c->has_pending = true;
+        }
+        c->pending = cfg.pipeline;
+    }
+
+    switch (sock.write(c, buf, len, &n)) {
+        case OK:    break;
+        case ERROR: goto error;
+        case RETRY: return;
+    }
+
+    c->written += n;
+    if (c->written == c->length) {
+        c->written = 0;
+        aeDeleteFileEvent(loop, c->fd, AE_WRITABLE);
+    }
+
+    return;
+
+  error:
+    thread->errors.write++;
+    cfg.proto->reconnect(thread, c);
 }
 
 static void usage() {
@@ -58,6 +125,8 @@ static void usage() {
            "    -d, --duration    <T>  Duration of test           \n"
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
+           "    -q, --quic             Use QUIC transport instead of TCP\n"
+           "    -p, --http             HTTP Version (09,10 or 11) \n"
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
            "    -L  --latency          Print latency statistics   \n"
@@ -93,7 +162,22 @@ int main(int argc, char **argv) {
     char *port    = copy_url_part(url, &parts, UF_PORT);
     char *service = port ? port : schema;
 
-    if (!strncmp("https", schema, 5)) {
+    sock.writeable = sock_writeable;
+    if (cfg.proto == &quic_proto) {
+/*        if ((cfg.quic = quic_init()) == NULL) {
+            fprintf(stderr, "unable to initialize QUIC\n");
+            ERR_print_errors_fp(stderr);
+            exit(1);
+        }*/
+
+        //Quic handles everything on its own
+        sock.connect  = 0;
+        sock.close    = 0;
+        sock.read     = 0;
+        sock.write    = 0;
+        sock.readable = 0;
+        sock.writeable = 0;
+    } else if (!strncmp("https", schema, 5)) {
         if ((cfg.ctx = ssl_init()) == NULL) {
             fprintf(stderr, "unable to initialize SSL\n");
             ERR_print_errors_fp(stderr);
@@ -117,14 +201,16 @@ int main(int argc, char **argv) {
 
     hdr_init(1, MAX_LATENCY, 3, &(statistics.requests->histogram));
 
+    bool is_tcp = cfg.proto == &tcp_proto;
 
-    lua_State *L = script_create(cfg.script, url, headers);
+    lua_State *L = script_create(cfg.script, url, headers, is_tcp);
+
     if (!script_resolve(L, host, service)) {
         char *msg = strerror(errno);
         fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
-        exit(1);
+        //exit(1);
     }
-    
+
     uint64_t connections = cfg.connections / cfg.threads;
     double throughput    = (double)cfg.rate / cfg.threads;
     uint64_t stop_at     = time_us() + (cfg.duration * 1000000);
@@ -136,7 +222,7 @@ int main(int argc, char **argv) {
         t->throughput = throughput;
         t->stop_at     = stop_at;
 
-        t->L = script_create(cfg.script, url, headers);
+        t->L = script_create(cfg.script, url, headers, cfg.proto == &tcp_proto);
         script_init(L, t, argc - optind, &argv[optind]);
 
         if (i == 0) {
@@ -205,9 +291,17 @@ int main(int argc, char **argv) {
     long double bytes_per_s = bytes      / runtime_s;
 
     stats *latency_stats = stats_alloc(10);
-    latency_stats->min = hdr_min(latency_histogram);
-    latency_stats->max = hdr_max(latency_histogram);
-    latency_stats->histogram = latency_histogram;
+    if ((int64_t)cfg.rate <= 0) {
+        printf("Rate is disabled, latency is not corrected");
+        latency_stats->min = hdr_min(u_latency_histogram);
+        latency_stats->max = hdr_max(u_latency_histogram);
+        latency_stats->histogram = u_latency_histogram;
+
+    } else {
+        latency_stats->min = hdr_min(latency_histogram);
+        latency_stats->max = hdr_max(latency_histogram);
+        latency_stats->histogram = latency_histogram;
+    }
 
     print_stats_header(cfg.raw);
     print_stats("Latency", latency_stats, format_time_us);
@@ -265,7 +359,8 @@ void *thread_main(void *arg) {
     hdr_init(1, MAX_LATENCY, 3, &thread->latency_histogram);
     hdr_init(1, MAX_LATENCY, 3, &thread->u_latency_histogram);
 
-    char *request,user = NULL;
+    char *request = NULL;
+    char *user = NULL;
     size_t length,user_len = 0;
 
     if (!cfg.dynamic) {
@@ -273,6 +368,12 @@ void *thread_main(void *arg) {
     }
 
     double throughput = (thread->throughput / 1000000.0) / thread->connections;
+
+    thread->quic       =  quic_init(cfg);
+    if (!thread->quic) {
+        printf("Could not initialize QUIC!\n");
+        exit(1);
+    }
 
     connection *c = thread->cs;
 
@@ -305,61 +406,10 @@ void *thread_main(void *arg) {
     return NULL;
 }
 
-static int connect_socket(thread *thread, connection *c) {
-    struct addrinfo *addr = thread->addr;
-    struct aeEventLoop *loop = thread->loop;
-    int fd, flags;
-
-    fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
-
-    flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-
-    if (c->bind.s_addr != 0) {
-        struct sockaddr_in localaddr;
-        localaddr.sin_family = AF_INET;
-        localaddr.sin_addr = c->bind;
-        localaddr.sin_port = 0;  // Any local port will do
-        int err = bind(fd, (struct sockaddr *)&localaddr, sizeof(localaddr));
-        if (err != 0) {
-            printf("Could not bind to given address : errno %d!\n",errno);
-            goto error;
-        }
-    }
-
-    if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
-        if (errno != EINPROGRESS) goto error;
-    }
-
-    flags = 1;
-    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
-
-    c->latest_connect = time_us();
-
-    flags = AE_READABLE | AE_WRITABLE;
-    if (aeCreateFileEvent(loop, fd, flags, socket_connected, c) == AE_OK) {
-        c->parser.data = c;
-        c->fd = fd;
-        return fd;
-    }
-
-  error:
-    thread->errors.connect++;
-    close(fd);
-    return -1;
-}
-
-static int reconnect_socket(thread *thread, connection *c) {
-    aeDeleteFileEvent(thread->loop, c->fd, AE_WRITABLE | AE_READABLE);
-    sock.close(c);
-    close(c->fd);
-    return connect_socket(thread, c);
-}
-
 static int delayed_initial_connect(aeEventLoop *loop, long long id, void *data) {
     connection* c = data;
     c->thread_start = time_us();
-    connect_socket(c->thread, c);
+    cfg.proto->connect(c->thread, c);
     return AE_NOMORE;
 }
 
@@ -452,80 +502,18 @@ static int response_body(http_parser *parser, const char *at, size_t len) {
     return 0;
 }
 
-static uint64_t usec_to_next_send(connection *c) {
-    uint64_t now = time_us();
-
-    uint64_t next_start_time = c->thread_start + (c->complete / c->throughput);
-
-    bool send_now = true;
-
-    if (next_start_time > now) {
-        // We are on pace. Indicate caught_up and don't send now.
-        c->caught_up = true;
-        send_now = false;
-    } else {
-        // We are behind
-        if (c->caught_up) {
-            // This is the first fall-behind since we were last caught up
-            c->caught_up = false;
-            c->catch_up_start_time = now;
-            c->complete_at_catch_up_start = c->complete;
-        }
-
-        // Figure out if it's time to send, per catch up throughput:
-        uint64_t complete_since_catch_up_start =
-                c->complete - c->complete_at_catch_up_start;
-
-        next_start_time = c->catch_up_start_time +
-                (complete_since_catch_up_start / c->catch_up_throughput);
-
-        if (next_start_time > now) {
-            // Not yet time to send, even at catch-up throughout:
-            send_now = false;
-        }
-    }
-
-    if (send_now) {
-        c->latest_should_send_time = now;
-        c->latest_expected_start = next_start_time;
-    }
-
-    return send_now ? 0 : (next_start_time - now);
-}
-
-static int delay_request(aeEventLoop *loop, long long id, void *data) {
-    connection* c = data;
-    uint64_t time_usec_to_wait = usec_to_next_send(c);
-    if (time_usec_to_wait) {
-        return round((time_usec_to_wait / 1000.0L) + 0.5); /* don't send, wait */
-    }
-    aeCreateFileEvent(c->thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
-    return AE_NOMORE;
-}
-
-static int response_complete(http_parser *parser) {
-    connection *c = parser->data;
+void stats_request_completed(connection* c) {
     thread *thread = c->thread;
     uint64_t now = time_us();
-    int status = parser->status_code;
+    if (now >= thread->stop_at) {
+        printf("Loop STOPPED\n");
+        aeStop(thread->loop);
+        goto done;
+    }
 
     thread->complete++;
     thread->requests++;
 
-    if (status > 399) {
-        thread->errors.status++;
-    }
-
-    if (c->headers.buffer) {
-        *c->headers.cursor++ = '\0';
-        script_response(thread->L, status, &c->headers, &c->body, c->user, c->user_len);
-        c->state = FIELD;
-    }
-
-    if (now >= thread->stop_at) {
-        aeStop(thread->loop);
-        goto done;
-    }
 
     // Count all responses (including pipelined ones:)
     c->complete++;
@@ -543,46 +531,72 @@ static int response_complete(http_parser *parser) {
     int64_t expected_latency_timing = now - expected_latency_start;
 
     if (expected_latency_timing < 0) {
+        uint64_t actual_latency_timing = now - c->actual_latency_start;
         printf("\n\n ---------- \n\n");
-        printf("We are about to crash and die (recoridng a negative #)");
+        printf("We are about to crash and die (recoridng a negative # : expected %d, actual %d)", expected_latency_timing, actual_latency_timing);
         printf("This wil never ever ever happen...");
         printf("But when it does. The following information will help in debugging");
         printf("response_complete:\n");
-        printf("  expected_latency_timing = %lld\n", expected_latency_timing);
-        printf("  now = %lld\n", now);
-        printf("  expected_latency_start = %lld\n", expected_latency_start);
-        printf("  c->thread_start = %lld\n", c->thread_start);
-        printf("  c->complete = %lld\n", c->complete);
+        printf("  expected_latency_timing = %" PRId64 "\n", expected_latency_timing);
+        printf("  now = %" PRId64 "\n", now);
+        printf("  expected_latency_start = %" PRId64 "\n", expected_latency_start);
+        printf("  c->thread_start = %" PRId64 "\n", c->thread_start);
+        printf("  c->complete = %" PRId64 "\n", c->complete);
         printf("  throughput = %g\n", c->throughput);
-        printf("  latest_should_send_time = %lld\n", c->latest_should_send_time);
-        printf("  latest_expected_start = %lld\n", c->latest_expected_start);
-        printf("  latest_connect = %lld\n", c->latest_connect);
-        printf("  latest_write = %lld\n", c->latest_write);
+        printf("  latest_should_send_time = %" PRId64 "\n", c->latest_should_send_time);
+        printf("  latest_expected_start = %" PRId64 "\n", c->latest_expected_start);
+        printf("  latest_connect = %" PRId64 "\n", c->latest_connect);
+        printf("  latest_write = %" PRId64 "\n", c->latest_write);
 
         expected_latency_start = c->thread_start +
                 ((c->complete ) / c->throughput);
-        printf("  next expected_latency_start = %lld\n", expected_latency_start);
+        printf("  next expected_latency_start = %" PRId64 "\n", expected_latency_start);
     }
 
     c->latest_should_send_time = 0;
     c->latest_expected_start = 0;
-
-    if (--c->pending == 0) {
-        c->has_pending = false;
-        aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
-    }
 
     // Record if needed, either last in batch or all, depending in cfg:
     if (cfg.record_all_responses || !c->has_pending) {
         hdr_record_value(thread->latency_histogram, expected_latency_timing);
 
         uint64_t actual_latency_timing = now - c->actual_latency_start;
+//        printf("[%p] LAT %d\n", c, actual_latency_timing);
         hdr_record_value(thread->u_latency_histogram, actual_latency_timing);
     }
 
+done:
+    return 0;
+}
+
+static int response_complete(http_parser *parser) {
+    connection *c = parser->data;
+    thread *thread = c->thread;
+    int status = parser->status_code;
+    printf("Response complete\n");
+
+    if (status > 399) {
+        thread->errors.status++;
+    }
+
+    if (c->headers.buffer) {
+        *c->headers.cursor++ = '\0';
+        script_response(thread->L, status, &c->headers, &c->body, c->user, c->user_len);
+        c->state = FIELD;
+    }
+
+
+    if (--c->pending == 0) {
+        c->has_pending = false;
+        aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
+    }
+
+    stats_request_completed(c);
 
     if (!http_should_keep_alive(parser)) {
-        reconnect_socket(thread, c);
+
+        fprintf(stderr, "Request complete, reconnecting\n");
+        cfg.proto->reconnect(thread, c);
         goto done;
     }
 
@@ -593,6 +607,7 @@ static int response_complete(http_parser *parser) {
 }
 
 static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
+    printf("Socket connected\n!");
     connection *c = data;
 
     switch (sock.connect(c, cfg.host)) {
@@ -611,64 +626,20 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     return;
 
   error:
+
+    fprintf(stderr, "Error connecting socket, reconnecting\n");
     c->thread->errors.connect++;
-    reconnect_socket(c->thread, c);
+    cfg.proto->reconnect(c->thread, c);
 
 }
 
+
+
+
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
-    thread *thread = c->thread;
-
-    if (!c->written) {
-        uint64_t time_usec_to_wait = usec_to_next_send(c);
-        if (time_usec_to_wait) {
-            int msec_to_wait = round((time_usec_to_wait / 1000.0L) + 0.5);
-
-            // Not yet time to send. Delay:
-            aeDeleteFileEvent(loop, fd, AE_WRITABLE);
-            aeCreateTimeEvent(
-                    thread->loop, msec_to_wait, delay_request, c, NULL);
-            return;
-        }
-        c->latest_write = time_us();
-    }
-
-    if (!c->written && cfg.dynamic) {
-        script_request(thread->L, &c->request, &c->length, &c->user, &c->user_len);
-    }
-
-    char  *buf = c->request + c->written;
-    size_t len = c->length  - c->written;
-    size_t n;
-
-    if (!c->written) {
-        c->start = time_us();
-        if (!c->has_pending) {
-            c->actual_latency_start = c->start;
-            c->complete_at_last_batch_start = c->complete;
-            c->has_pending = true;
-        }
-        c->pending = cfg.pipeline;
-    }
-
-    switch (sock.write(c, buf, len, &n)) {
-        case OK:    break;
-        case ERROR: goto error;
-        case RETRY: return;
-    }
-
-    c->written += n;
-    if (c->written == c->length) {
-        c->written = 0;
-        aeDeleteFileEvent(loop, fd, AE_WRITABLE);
-    }
-
-    return;
-
-  error:
-    thread->errors.write++;
-    reconnect_socket(thread, c);
+    assert(fd == c->fd);
+    sock.writeable(c, loop);
 }
 
 
@@ -681,23 +652,23 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
             case OK:    break;
             case ERROR: goto error;
             case RETRY: return;
+            case AGAIN: continue;
         }
 
-        if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
+        if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) {
+            fprintf(stderr, "Could not parse query\n");
+            goto error;
+        }
         c->thread->bytes += n;
     } while (n == RECVBUF && sock.readable(c) > 0);
 
     return;
 
   error:
-    c->thread->errors.read++;
-    reconnect_socket(c->thread, c);
-}
 
-static uint64_t time_us() {
-    struct timeval t;
-    gettimeofday(&t, NULL);
-    return (t.tv_sec * 1000000) + t.tv_usec;
+    fprintf(stderr, "Error reading, reconnecting\n");
+    c->thread->errors.read++;
+    cfg.proto->reconnect(c->thread, c);
 }
 
 static char *copy_url_part(char *url, struct http_parser_url *parts, enum http_parser_url_fields field) {
@@ -728,6 +699,8 @@ static struct option longopts[] = {
     { "version",        no_argument,       NULL, 'v' },
     { "rate",           required_argument, NULL, 'R' },
     { "raw",         no_argument,       NULL, 'r' },
+    { "quic",           no_argument,        NULL, 'q' },
+    { "http",           required_argument,        NULL, 'p' },
     { NULL,             0,                 NULL,  0  }
 };
 
@@ -743,14 +716,19 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->bind        = 0;
     cfg->rate        = 0;
     cfg->record_all_responses = true;
+    cfg->proto = &tcp_proto;
+    cfg->http_version = 11;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:b:T:R:LUBrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:b:T:R:LUBrqv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
                 break;
             case 'c':
                 if (scan_metric(optarg, &cfg->connections)) return -1;
+                break;
+            case 'q':
+                cfg->proto = &quic_proto;
                 break;
             case 'd':
                 if (scan_time(optarg, &cfg->duration)) return -1;
@@ -764,6 +742,8 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'L':
                 cfg->latency = true;
                 break;
+            case 'p':
+                cfg->http_version = atoi(optarg);
             case 'b':
                 cfg->bind = inet_addr(optarg);
                 break;
@@ -771,7 +751,6 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 cfg->record_all_responses = false;
                 break;
             case 'U':
-                cfg->latency = true;
                 cfg->u_latency = true;
                 break;
             case 'T':
@@ -809,9 +788,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     }
 
     if (cfg->rate == 0) {
-        fprintf(stderr,
-                "Throughput MUST be specified with the --rate or -R option\n");
-        return -1;
+        cfg->rate = -1;
     }
 
     *url    = argv[optind];
@@ -880,7 +857,7 @@ static void print_hdr_latency(struct hdr_histogram* histogram, const char* descr
     hdr_percentiles_print(histogram, stdout, 5, 1000.0, CLASSIC);
 }
 
-static void print_stats_latency(stats *stats, bool raw) {
+/*static void print_stats_latency(stats *stats, bool raw) {
     long double percentiles[] = { 50.0, 75.0, 90.0, 99.0, 99.9, 99.99, 99.999, 100.0 };
     printf("  Latency Distribution\n");
     for (size_t i = 0; i < sizeof(percentiles) / sizeof(long double); i++) {
@@ -893,4 +870,4 @@ static void print_stats_latency(stats *stats, bool raw) {
         print_units(n, format_time_us, 10);
         printf("\n");
     }
-}
+}*/

@@ -45,7 +45,7 @@ static const struct luaL_reg threadlib[] = {
     { NULL,         NULL                   }
 };
 
-lua_State *script_create(char *file, char *url, char **headers) {
+lua_State *script_create(char *file, char *url, char **headers, bool is_tcp) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
     (void) luaL_dostring(L, "wrk = require \"wrk\"");
@@ -56,6 +56,9 @@ lua_State *script_create(char *file, char *url, char **headers) {
     luaL_register(L, NULL, statslib);
     luaL_newmetatable(L, "wrk.thread");
     luaL_register(L, NULL, threadlib);
+
+    lua_pushboolean(L, is_tcp);
+    lua_setglobal(L, "tcp");
 
     struct http_parser_url parts = {};
     script_parse_url(url, &parts);
@@ -74,7 +77,6 @@ lua_State *script_create(char *file, char *url, char **headers) {
     };
 
     lua_getglobal(L, "wrk");
-
     set_field(L, 4, "scheme", push_url_part(L, url, &parts, UF_SCHEMA));
     set_field(L, 4, "host",   push_url_part(L, url, &parts, UF_HOST));
     set_field(L, 4, "port",   push_url_part(L, url, &parts, UF_PORT));
@@ -312,6 +314,7 @@ size_t script_verify_request(lua_State *L) {
         }
 
         fprintf(stderr, "%s at %d:%d\n", msg, line, column);
+        printf("%s", request);
         exit(1);
     }
 
@@ -461,10 +464,15 @@ static int script_thread_newindex(lua_State *L) {
 }
 
 static int script_wrk_lookup(lua_State *L) {
+
+    lua_getglobal(L, "tcp");
+    bool is_tcp = lua_toboolean(L, -1);
+    printf("ISTCP %d\n", is_tcp );
+    lua_pop(L, 1);
     struct addrinfo *addrs;
     struct addrinfo hints = {
         .ai_family   = AF_UNSPEC,
-        .ai_socktype = SOCK_STREAM
+        .ai_socktype = is_tcp? SOCK_STREAM : SOCK_DGRAM
     };
     int rc, index = 1;
 
