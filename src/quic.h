@@ -42,6 +42,7 @@ static void quic_socket_connected(aeEventLoop *loop, int fd, void *data, int mas
 
         uint64_t now = time_us();
     uint64_t actual_latency_timing = now - c->actual_latency_start;
+    (void)actual_latency_timing;
     debug("Quic Socket connected (fd %d, lat %d)\n!",fd, actual_latency_timing);
 again:
     switch (quic_connect(c, cfg.host, fd)) {
@@ -75,11 +76,7 @@ int write_request(aeEventLoop *loop, long long id, void *data) {
     return AE_NOMORE;
 }
 
-int delay_send(aeEventLoop *loop, long long id, void *data) {
-    //printf("Sending data in ...\n");
-    assert(false);
-    return AE_NOMORE;
-}
+
 
 static int quic_connect_socket(thread *thread, connection *c) {
     struct addrinfo *addr = thread->addr;
@@ -153,6 +150,11 @@ static int quic_reconnect_socket(thread *thread, connection *c) {
     return 0;
 }
 
+int delay_recon(aeEventLoop *loop, long long id, void *data) {
+    connection* c = (connection*) data;
+    quic_reconnect_socket(c->thread, c);
+    return AE_NOMORE;
+}
 
 int quic_callback(picoquic_cnx_t* cnx,
     uint64_t stream_id, uint8_t* bytes, size_t length,
@@ -267,20 +269,7 @@ int quic_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_prepare_to_send: {
             debug("Ready to send");
-
-//                    uint64_t time_usec_to_wait = usec_to_next_send(c);
-
-//                    printf("Generating request in %lu\n",time_usec_to_wait);
-/*                    if (time_usec_to_wait) {
-                        int msec_to_wait = round((time_usec_to_wait / 1000.0L) + 0.5);
-
-                        // Not yet time to send. Delay:
-                        aeDeleteFileEvent(loop, c->fd, AE_WRITABLE);
-                        aeCreateTimeEvent(
-                            thread->loop, msec_to_wait, delay_request, c, NULL);
-                        return;
-                    }*/
-                    c->latest_write = time_us();
+            c->latest_write = time_us();
 
         if (!c->written && cfg.dynamic) {
             script_request(c->thread->L, &c->request, &c->length, &c->user, &c->user_len);
@@ -356,26 +345,20 @@ int quic_callback(picoquic_cnx_t* cnx,
     return ret;
 
 restart:
-/*        uint64_t time_usec_to_wait = usec_to_next_send(c);
+    {
+        uint64_t time_usec_to_wait = usec_to_next_send(c);
         if (time_usec_to_wait) {
             int msec_to_wait = round((time_usec_to_wait / 1000.0L) + 0.5);
 
             // Not yet time to send. Delay:
-            aeDeleteFileEvent(loop, c->fd, AE_WRITABLE);
-            aeCreateTimeEvent(
-                    thread->loop, msec_to_wait, delay_request, c, NULL);
+//            aeDeleteFileEvent(thread->loop, c->fd, AE_WRITABLE);
+            aeCreateTimeEvent(c->thread->loop, msec_to_wait, delay_recon, c, NULL);
         } else {
-            aeCreateFileEvent(c->thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
-        }*/
-    //printf("Reconnecting !\n");
-    //printf("Closing FD %d", c->fd);
-    //close(c->fd);
+//            aeCreateFileEvent(c->thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
 
-//   aeDeleteFileEvent(c->thread->loop,c->fd, AE_WRITABLE | AE_READABLE);
-
-    //c->fd = 0;
-//        picoquic_set_callback(c->cnx, NULL, NULL);
-    quic_reconnect_socket(c->thread, c);
+                quic_reconnect_socket(c->thread, c);
+        }
+    }
 }
 
 
