@@ -1,7 +1,9 @@
-# wrk2
+# WRK-QUIC
 [![Build Status](https://travis-ci.com/tbarbette/wrk-quic.svg?branch=master)](https://travis-ci.com/tbarbette/wrk-quic)
 
   **a TCP/HTTP & QUIC/HTTP benchmarking tool based on wrk and wrk2**
+  
+  Note that despite the name, WRK-QUIC still fully supports WRK1/2 features, with even some improvements.
 
   This repository is a modified version of WRK2 [http://github.com/gilene/wrk2](wrk2) with support for QUIC and various small improvements
 
