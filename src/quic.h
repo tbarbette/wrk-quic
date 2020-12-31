@@ -601,7 +601,7 @@ static void quic_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
                     debug("Delaying fd %d for %dms", fd, delta_t);
                 aeDeleteFileEvent(loop, fd, AE_WRITABLE);
                 fd_to_cnx[fd].ae = aeCreateTimeEvent(
-                        thread->loop, delta_t, write_request, fd, NULL);
+                        thread->loop, delta_t, write_request, (void*)fd, NULL);
             }
              else
              {
@@ -611,14 +611,6 @@ static void quic_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         }
     }
     debug("RETURN\n");
-    return;
-
-  error:
-            //printf("Error in writable, reconnecting\n");
-    thread->errors.write++;
-//    cfg.proto->reconnect(thread, c);
-
-//    return SSL_pending(c->ssl);
     return;
 }
 
