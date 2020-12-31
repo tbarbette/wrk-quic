@@ -104,8 +104,9 @@ static int quic_connect_socket(thread *thread, connection *c) {
     localaddr.sin_family = AF_INET;
     if (c->bind.s_addr != 0) {
         localaddr.sin_addr = c->bind;
-    } else
-        localaddr.sin_addr.s_addr = INADDR_ANY;
+    } else {
+        localaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    }
     localaddr.sin_port = 0;  // Any local port will do
     int err = bind(fd, (struct sockaddr *)&localaddr, sizeof(localaddr));
     if (err != 0) {

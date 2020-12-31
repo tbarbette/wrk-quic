@@ -752,6 +752,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 'p':
                 cfg->http_version = atoi(optarg);
+                break;
             case 'b':
                 cfg->bind = inet_addr(optarg);
                 break;

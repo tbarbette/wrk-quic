@@ -158,7 +158,6 @@ void script_request(lua_State *L, char **buf, size_t *len, char** user, size_t *
     }
     lua_call(L, 0, LUA_MULTRET);
     int nresults = lua_gettop(L) - level;
-    printf("%d results\n", nresults);
     if (nresults == 2) {
         const char *str_user = lua_tolstring(L, -1, user_len);
         *user = realloc(*user, *user_len);
