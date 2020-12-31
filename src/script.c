@@ -45,7 +45,7 @@ static const struct luaL_reg threadlib[] = {
     { NULL,         NULL                   }
 };
 
-lua_State *script_create(char *file, char *url, char **headers, bool is_tcp) {
+lua_State *script_create(char *file, char *url, char **headers, bool is_tcp, int version) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
     (void) luaL_dostring(L, "wrk = require \"wrk\"");
@@ -56,6 +56,9 @@ lua_State *script_create(char *file, char *url, char **headers, bool is_tcp) {
     luaL_register(L, NULL, statslib);
     luaL_newmetatable(L, "wrk.thread");
     luaL_register(L, NULL, threadlib);
+
+    lua_pushinteger(L, version);
+    lua_setglobal(L, "version");
 
     lua_pushboolean(L, is_tcp);
     lua_setglobal(L, "tcp");
@@ -155,17 +158,19 @@ void script_request(lua_State *L, char **buf, size_t *len, char** user, size_t *
     }
     lua_call(L, 0, LUA_MULTRET);
     int nresults = lua_gettop(L) - level;
+    printf("%d results\n", nresults);
     if (nresults == 2) {
-    const char *str_user = lua_tolstring(L, -1, user_len);
-    *user = realloc(*user, *user_len);
-    memcpy(*user, str_user, *user_len);
-    lua_pop(L, pop);}
+        const char *str_user = lua_tolstring(L, -1, user_len);
+        *user = realloc(*user, *user_len);
+        memcpy(*user, str_user, *user_len);
+        lua_pop(L, pop);
+    }
 
     const char *str = lua_tolstring(L, -1, len);
     *buf = realloc(*buf, *len);
     memcpy(*buf, str, *len);
     lua_pop(L, pop);
-   }
+}
 
 void script_bind(lua_State *L, char **buf, size_t *len) {
     int pop = 1;
@@ -467,7 +472,6 @@ static int script_wrk_lookup(lua_State *L) {
 
     lua_getglobal(L, "tcp");
     bool is_tcp = lua_toboolean(L, -1);
-    printf("ISTCP %d\n", is_tcp );
     lua_pop(L, 1);
     struct addrinfo *addrs;
     struct addrinfo hints = {

@@ -50,6 +50,7 @@ typedef struct {
     errors errors;
     struct connection *cs;
     picoquic_quic_t *quic;
+    char* alpn;
 } thread;
 
 typedef struct {
@@ -159,5 +160,6 @@ static uint64_t usec_to_next_send(connection *c) {
 
 
 int delay_request(aeEventLoop *loop, long long id, void *data);
+void stats_request_completed(connection* c);
 
 #endif /* WRK_H */

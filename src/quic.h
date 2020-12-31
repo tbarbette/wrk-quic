@@ -4,6 +4,9 @@
 
 #include <sys/ioctl.h>
 
+char* ALPN_HQ = "hq";
+char* ALPN_SAMPLE_SERVER = "picoquic_sample";
+
 #define DEBUG 0
 
 #if DEBUG
@@ -96,25 +99,20 @@ static int quic_connect_socket(thread *thread, connection *c) {
     picoquic_socket_set_ecn_options(fd, addr->ai_family, &recv_set, &send_set);
     picoquic_socket_set_pkt_info(fd, addr->ai_family);
 
-//     fd = picoquic_open_client_socket(addr->ai_family);
-    /*    int err = write(fd, "hello", 5);
-    //printf("Sent err %d\n", err);
-    assert(err > 0);*/
-//    flags = fcntl(fd, F_GETFL, 0);
-//    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-
+    debug("Binding...\n");
+    struct sockaddr_in localaddr;
+    localaddr.sin_family = AF_INET;
     if (c->bind.s_addr != 0) {
-        //printf("Binding...\n");
-        struct sockaddr_in localaddr;
-        localaddr.sin_family = AF_INET;
         localaddr.sin_addr = c->bind;
-        localaddr.sin_port = 0;  // Any local port will do
-        int err = bind(fd, (struct sockaddr *)&localaddr, sizeof(localaddr));
-        if (err != 0) {
-            //printf("Could not bind to given address : errno %d!\n",errno);
-            goto error;
-        }
+    } else
+        localaddr.sin_addr.s_addr = INADDR_ANY;
+    localaddr.sin_port = 0;  // Any local port will do
+    int err = bind(fd, (struct sockaddr *)&localaddr, sizeof(localaddr));
+    if (err != 0) {
+        //printf("Could not bind to given address : errno %d!\n",errno);
+        goto error;
     }
+
 
     /*//printf("Connect...\n");
     if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
@@ -135,6 +133,7 @@ static int quic_connect_socket(thread *thread, connection *c) {
     }
 
   error:
+    debug("Closing %d", fd);
     close(fd);
   oerror:
 
@@ -277,10 +276,6 @@ int quic_callback(picoquic_cnx_t* cnx,
 
         char  *buf = c->request + c->written;
         size_t len = c->length  - c->written;
-//        size_t n;
-
-//        if (!c->written) {
-//
         uint64_t now = time_us();
         uint64_t actual_latency_timing = now - c->actual_latency_start;
         debug("RECON LAT %d", actual_latency_timing);
@@ -292,7 +287,6 @@ int quic_callback(picoquic_cnx_t* cnx,
                 c->has_pending = true;
             }
             c->pending = cfg.pipeline;
-  //      }
         //printf("Request size %lu/%lu written %lu\n", len, c->length, c->written);
 
         uint8_t* buffer;
@@ -318,7 +312,7 @@ int quic_callback(picoquic_cnx_t* cnx,
             }
                 break;
         case picoquic_callback_almost_ready:
-//            fprintf(stdout, "Connection to the server completed, almost ready.\n");
+             debug("Connection to the server completed, almost ready.\n");
         http_parser_init(&c->parser, HTTP_RESPONSE);
         c->written = 0;
             struct sockaddr* peer_addr;
@@ -333,10 +327,10 @@ int quic_callback(picoquic_cnx_t* cnx,
             break;
         case picoquic_callback_ready:
             /* TODO: Check that the transport parameters are what the sample expects */
-//            fprintf(stdout, "Connection to the server confirmed.\n");
+            debug("Connection to the server confirmed.\n");
             break;
         default:
-            //printf("Unexpected callback!?\n");
+            debug("Unexpected callback!?\n");
             /* unexpected -- just ignore. */
             break;
         }
@@ -359,6 +353,7 @@ restart:
                 quic_reconnect_socket(c->thread, c);
         }
     }
+    return ret;
 }
 
 
@@ -399,8 +394,8 @@ status quic_connect(connection *c, char *host, int fd) {
     char const* sni = host;
     int ret;
     struct sockaddr_in* sin = (struct sockaddr_in*)addr->ai_addr;
-    //printf("Creating Context for addr %x (host %s)\n", sin->sin_addr, host);
-    char* alpn = "hq";
+    debug("Creating Context for addr %x (host %s), alpn %s\n", sin->sin_addr, host,c->thread->alpn);
+    char* alpn = c->thread->alpn;
     assert(quic);
     c->written = 0;
 		picoquic_cnx_t* cnx = picoquic_create_cnx(quic, picoquic_null_connection_id, picoquic_null_connection_id,
@@ -411,7 +406,7 @@ status quic_connect(connection *c, char *host, int fd) {
             fprintf(stderr, "Could not create connection context\n");
             ret = -1;
         } else {
-            //printf("Starting Client Context\n");
+            debug("Starting Client Context\n");
             c->cnx = cnx;
             /* Set the client callback context */
             picoquic_set_callback(cnx, quic_callback, c);
@@ -435,7 +430,7 @@ status quic_connect(connection *c, char *host, int fd) {
                 fprintf(stdout, "Error %d, cannot initialize stream for file number %d\n", ret, stream_id);
                                     }
              else {
-                //printf("Opened stream %d\n", stream_id);
+                debug("Opened stream %d\n", stream_id);
             }
 
         }
@@ -568,38 +563,19 @@ static void quic_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 	struct sockaddr_storage peer_addr;
     struct sockaddr_storage local_addr;
     int if_index = 0;
-	picoquic_connection_id_t log_cid;
+	//picoquic_connection_id_t log_cid;
     (void)quic;
-    int received_ecn;
     uint64_t current_time = picoquic_current_time();
-    int delta_t = 0;
- /* Check whether packets arrive before delta_t */
-/*            send_length = picoquic_select(&c->fd, 1,
-                                &peer_addr, &local_addr, &if_index, &received_ecn,
-                                            send_buffer, sizeof(send_buffer),
-                                                        delta_t, &current_time);
-*/
-/*  */
 
- //   printf("PREPARING NEXT PACKET\n");
-//    picoquic_cnx_t* last_cnx;
-/*    ret = picoquic_prepare_next_packet(quic, current_time,
-                send_buffer, sizeof(send_buffer), &send_length,
-                &peer_addr, &local_addr, &if_index, &log_cid, &last_cnx);*/
     picoquic_cnx_t* cnx = fd_to_cnx[fd].cnx;
-   ret = picoquic_prepare_packet(cnx, current_time,
+    ret = picoquic_prepare_packet(cnx, current_time,
                 send_buffer, sizeof(send_buffer), &send_length,
                 &peer_addr, &local_addr, &if_index);
 
-//    printf("LAST CNX %p\n", last_cnx);
     if (ret == 0 && send_length > 0) {
 
         struct sockaddr_in *speer = (struct sockaddr_in *)&peer_addr;
         struct sockaddr_in *slocal = (struct sockaddr_in *)&local_addr;
-
-        //printf("WRITE %lu bytes, peer addr %x:%d (fam %d), local address %x (fam %d)\n", send_length, speer->sin_addr,speer->sin_port, peer_addr.ss_family, slocal->sin_addr, local_addr.ss_family);
-
-//        assert(peer_addr.ss_family == local_addr.ss_family);
 
         // Send the packet that was just prepared
         sock_ret = picoquic_send_through_socket(fd,
@@ -610,8 +586,6 @@ static void quic_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
                 peer_addr.ss_family, local_addr.ss_family,fd,  sock_ret, sock_err);
         }
     } else {
-        //printf("Ret %d, snd length %d\n", ret, send_length);
-
         if (ret != 0) {
            debug("ERRRORR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 

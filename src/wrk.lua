@@ -41,7 +41,14 @@ function wrk.init(args)
       init(args)
    end
 
-   local req = wrk.format09()
+   local req;
+   if version == -1 then
+       req = wrk.formatsimple()
+   elseif version == 09 then
+       req = wrk.format09()
+   else
+       req = wrk.format()
+   end
    wrk.request = function()
       return req
    end
@@ -86,4 +93,12 @@ function wrk.format09(method, path, headers, body)
    return table.concat(s, "\r\n")
 end
 
+function wrk.formatsimple(method, path, headers, body)
+   local method  = method  or wrk.method
+   local path    = path    or wrk.path
+   local headers = headers or wrk.headers
+   local body    = body    or wrk.body
+   local s = string.format("%s", path)
+   return s
+end
 return wrk

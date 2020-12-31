@@ -99,10 +99,12 @@ static void sock_writeable(connection* c, aeEventLoop *loop) {
         c->pending = cfg.pipeline;
     }
 
+eagain:
     switch (sock.write(c, buf, len, &n)) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;
+        case AGAIN: goto eagain;
     }
 
     c->written += n;
@@ -127,6 +129,8 @@ static void usage() {
            "                                                      \n"
            "    -q, --quic             Use QUIC transport instead of TCP\n"
            "    -p, --http             HTTP Version (09,10 or 11) \n"
+           "                           -1 use the sample server   \n"
+           "                           picoquic mechanism.        \n"
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
            "    -L  --latency          Print latency statistics   \n"
@@ -164,12 +168,6 @@ int main(int argc, char **argv) {
 
     sock.writeable = sock_writeable;
     if (cfg.proto == &quic_proto) {
-/*        if ((cfg.quic = quic_init()) == NULL) {
-            fprintf(stderr, "unable to initialize QUIC\n");
-            ERR_print_errors_fp(stderr);
-            exit(1);
-        }*/
-
         //Quic handles everything on its own
         sock.connect  = 0;
         sock.close    = 0;
@@ -203,7 +201,7 @@ int main(int argc, char **argv) {
 
     bool is_tcp = cfg.proto == &tcp_proto;
 
-    lua_State *L = script_create(cfg.script, url, headers, is_tcp);
+    lua_State *L = script_create(cfg.script, url, headers, is_tcp, cfg.http_version);
 
     if (!script_resolve(L, host, service)) {
         char *msg = strerror(errno);
@@ -222,11 +220,14 @@ int main(int argc, char **argv) {
         t->throughput = throughput;
         t->stop_at     = stop_at;
 
-        t->L = script_create(cfg.script, url, headers, cfg.proto == &tcp_proto);
+        t->L = script_create(cfg.script, url, headers, cfg.proto == &tcp_proto, cfg.http_version);
         script_init(L, t, argc - optind, &argv[optind]);
 
         if (i == 0) {
-            cfg.pipeline = script_verify_request(t->L);
+            if (cfg.http_version >= 0)
+                cfg.pipeline = script_verify_request(t->L);
+            else
+                cfg.pipeline = 1;
             cfg.dynamic = !script_is_static(t->L);
             if (script_want_response(t->L)) {
                 parser_settings.on_header_field = header_field;
@@ -369,10 +370,17 @@ void *thread_main(void *arg) {
 
     double throughput = (thread->throughput / 1000000.0) / thread->connections;
 
-    thread->quic       =  quic_init(cfg);
-    if (!thread->quic) {
-        printf("Could not initialize QUIC!\n");
-        exit(1);
+    if (cfg.proto == &quic_proto) {
+        if (cfg.http_version < 0)
+            thread->alpn = ALPN_SAMPLE_SERVER;
+        else
+            thread->alpn = ALPN_HQ;
+
+        thread->quic       =  quic_init(cfg);
+        if (!thread->quic) {
+            printf("Could not initialize QUIC!\n");
+            exit(1);
+        }
     }
 
     connection *c = thread->cs;
@@ -506,7 +514,6 @@ void stats_request_completed(connection* c) {
     thread *thread = c->thread;
     uint64_t now = time_us();
     if (now >= thread->stop_at) {
-        printf("Loop STOPPED\n");
         aeStop(thread->loop);
         goto done;
     }
@@ -533,7 +540,7 @@ void stats_request_completed(connection* c) {
     if (expected_latency_timing < 0) {
         uint64_t actual_latency_timing = now - c->actual_latency_start;
         printf("\n\n ---------- \n\n");
-        printf("We are about to crash and die (recoridng a negative # : expected %d, actual %d)", expected_latency_timing, actual_latency_timing);
+        printf("We are about to crash and die (recoridng a negative # : expected %ld, actual %ld)", expected_latency_timing, actual_latency_timing);
         printf("This wil never ever ever happen...");
         printf("But when it does. The following information will help in debugging");
         printf("response_complete:\n");
@@ -566,7 +573,7 @@ void stats_request_completed(connection* c) {
     }
 
 done:
-    return 0;
+    return;
 }
 
 static int response_complete(http_parser *parser) {
@@ -609,11 +616,12 @@ static int response_complete(http_parser *parser) {
 static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     printf("Socket connected\n!");
     connection *c = data;
-
+    eagain:
     switch (sock.connect(c, cfg.host)) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;
+        case AGAIN: goto eagain;
     }
 
     http_parser_init(&c->parser, HTTP_RESPONSE);
