@@ -11,4 +11,11 @@
 
   The QUIC support is built using the picoquic library. Refer to picoquic for installation. To enable QUIC support, you must use the -q flag. Except for that most wrk2 documentation applies. We just changed a bit the default behavior, so if you omit the rate (or give -R -1) WRK will behave like the original version, trying to push as many request as possible.
 
+## Building
 
+```
+./autogen.sh
+./configure
+make
+sudo make install
+```
