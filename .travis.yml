@@ -20,7 +20,6 @@ install:
     - cd ..
     - git clone https://github.com/private-octopus/picoquic.git
     - cd picoquic
-    - git checkout make-install
     - cmake .
     - make
     - make DESTDIR=$(pwd)/../ install
