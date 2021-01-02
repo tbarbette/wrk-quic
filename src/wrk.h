@@ -2,6 +2,7 @@
 #define WRK_H
 
 #include "config.h"
+#include "glue.h"
 #include <pthread.h>
 #include <inttypes.h>
 #include <sys/types.h>

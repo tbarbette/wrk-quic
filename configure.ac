@@ -5,7 +5,7 @@ AC_INIT([WRK3], 1.0)
 # Process this file with autoconf to produce a configure script.
 
 AC_CONFIG_SRCDIR([src/wrk.c])
-AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_HEADERS([src/config.h:config.h.in])
 
 # Checks for programs.
 AC_PROG_CXX
@@ -47,9 +47,39 @@ AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 AC_CHECK_TYPES([ptrdiff_t])
 
+
+quiclibs=
+tlslibs=
+
+AC_CHECK_LIB([picotls-core],[ptls_calc_hash])
+
+AC_CHECK_LIB([picotls-fusion],[ptls_fusion_aesgcm_encrypt],[have_fusion=yes])
+
+tlslibs="-lpicotls-core -lpicotls-openssl"
+
+if test "$have_fusion" = "yes"; then
+    tlslibs="$tlslibs -lpicotls-fusion"
+fi
+
+save_LIBS="$LIBS"
+LIBS="$tlslibs $LIBS"
+AC_CHECK_LIB([picoquic-core],[picoquic_create],[have_picoquic=yes])
+if test "$have_picoquic" = "yes"; then
+    quiclibs="-lpicoquic-core -lpicoquic-log"
+
+    AC_DEFINE([HAVE_QUIC],[1],[Have QUIC support])
+else
+    echo "WARNING! Picoquic was not found! Did you 'make install' it?"
+fi
+LIBS="$save_LIBS"
+
+AC_SUBST(TLSLIBS, $tlslibs)
+AC_SUBST(QUICLIBS, $quiclibs)
+
 # Checks for library functions.
 AC_FUNC_ERROR_AT_LINE
 
+AC_CONFIG_FILES([stamp-h], [echo timestamp > stamp-h])
 AC_CONFIG_FILES(Makefile)
 AC_OUTPUT
 

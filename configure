@@ -621,6 +621,8 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+QUICLIBS
+TLSLIBS
 EGREP
 GREP
 CPP
@@ -2260,7 +2262,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 # Process this file with autoconf to produce a configure script.
 
 
-ac_config_headers="$ac_config_headers config.h"
+ac_config_headers="$ac_config_headers src/config.h:config.h.in"
 
 
 # Checks for programs.
@@ -4462,6 +4464,161 @@ _ACEOF
 fi
 
 
+
+quiclibs=
+tlslibs=
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for ptls_calc_hash in -lpicotls-core" >&5
+$as_echo_n "checking for ptls_calc_hash in -lpicotls-core... " >&6; }
+if ${ac_cv_lib_picotls_core_ptls_calc_hash+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lpicotls-core  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char ptls_calc_hash ();
+int
+main ()
+{
+return ptls_calc_hash ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_picotls_core_ptls_calc_hash=yes
+else
+  ac_cv_lib_picotls_core_ptls_calc_hash=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_picotls_core_ptls_calc_hash" >&5
+$as_echo "$ac_cv_lib_picotls_core_ptls_calc_hash" >&6; }
+if test "x$ac_cv_lib_picotls_core_ptls_calc_hash" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBPICOTLS_CORE 1
+_ACEOF
+
+  LIBS="-lpicotls-core $LIBS"
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for ptls_fusion_aesgcm_encrypt in -lpicotls-fusion" >&5
+$as_echo_n "checking for ptls_fusion_aesgcm_encrypt in -lpicotls-fusion... " >&6; }
+if ${ac_cv_lib_picotls_fusion_ptls_fusion_aesgcm_encrypt+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lpicotls-fusion  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char ptls_fusion_aesgcm_encrypt ();
+int
+main ()
+{
+return ptls_fusion_aesgcm_encrypt ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_picotls_fusion_ptls_fusion_aesgcm_encrypt=yes
+else
+  ac_cv_lib_picotls_fusion_ptls_fusion_aesgcm_encrypt=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_picotls_fusion_ptls_fusion_aesgcm_encrypt" >&5
+$as_echo "$ac_cv_lib_picotls_fusion_ptls_fusion_aesgcm_encrypt" >&6; }
+if test "x$ac_cv_lib_picotls_fusion_ptls_fusion_aesgcm_encrypt" = xyes; then :
+  have_fusion=yes
+fi
+
+
+tlslibs="-lpicotls-core -lpicotls-openssl"
+
+if test "$have_fusion" = "yes"; then
+    tlslibs="$tlslibs -lpicotls-fusion"
+fi
+
+save_LIBS="$LIBS"
+LIBS="$tlslibs $LIBS"
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for picoquic_create in -lpicoquic-core" >&5
+$as_echo_n "checking for picoquic_create in -lpicoquic-core... " >&6; }
+if ${ac_cv_lib_picoquic_core_picoquic_create+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lpicoquic-core  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char picoquic_create ();
+int
+main ()
+{
+return picoquic_create ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_picoquic_core_picoquic_create=yes
+else
+  ac_cv_lib_picoquic_core_picoquic_create=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_picoquic_core_picoquic_create" >&5
+$as_echo "$ac_cv_lib_picoquic_core_picoquic_create" >&6; }
+if test "x$ac_cv_lib_picoquic_core_picoquic_create" = xyes; then :
+  have_picoquic=yes
+fi
+
+if test "$have_picoquic" = "yes"; then
+    quiclibs="-lpicoquic-core -lpicoquic-log"
+
+
+$as_echo "#define HAVE_QUIC 1" >>confdefs.h
+
+else
+    echo "WARNING! Picoquic was not found! Did you 'make install' it?"
+fi
+LIBS="$save_LIBS"
+
+TLSLIBS=$tlslibs
+
+QUICLIBS=$quiclibs
+
+
 # Checks for library functions.
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for error_at_line" >&5
 $as_echo_n "checking for error_at_line... " >&6; }
@@ -4498,6 +4655,8 @@ esac
 
 fi
 
+
+ac_config_files="$ac_config_files stamp-h"
 
 ac_config_files="$ac_config_files Makefile"
 
@@ -5191,7 +5350,8 @@ cat >>$CONFIG_STATUS <<\_ACEOF || ac_write_fail=1
 for ac_config_target in $ac_config_targets
 do
   case $ac_config_target in
-    "config.h") CONFIG_HEADERS="$CONFIG_HEADERS config.h" ;;
+    "src/config.h") CONFIG_HEADERS="$CONFIG_HEADERS src/config.h:config.h.in" ;;
+    "stamp-h") CONFIG_FILES="$CONFIG_FILES stamp-h" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
@@ -5777,6 +5937,11 @@ $as_echo X"$_am_arg" |
 
   esac
 
+
+  case $ac_file$ac_mode in
+    "stamp-h":F) echo timestamp > stamp-h ;;
+
+  esac
 done # for ac_tag
 
 

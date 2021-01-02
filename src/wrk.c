@@ -75,7 +75,9 @@ static uint64_t usec_to_next_send(connection *c) {
 }
 
 #include "tcp.h"
+#ifdef HAVE_QUIC
 #include "quic.h"
+#endif
 
 static struct {
     stats *requests;

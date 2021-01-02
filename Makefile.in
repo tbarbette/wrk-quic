@@ -1,5 +1,5 @@
 CFLAGS  := -std=c99 -Wall -O2 -D_REENTRANT
-LIBS    := -lpthread -lm -lcrypto -lssl -lpicoquic-core  -lpicotls-core -lpicotls-openssl -lpicoquic-log
+LIBS    := -lpthread -lm -lcrypto -lssl @QUICLIBS@ @TLSLIBS@
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
@@ -14,7 +14,7 @@ else ifeq ($(TARGET), darwin)
 	LIBS += -L/usr/local/opt/openssl/lib
 	CFLAGS += -I/usr/local/include -I/usr/local/opt/openssl/include
 else ifeq ($(TARGET), linux)
-        CFLAGS  += -D_POSIX_C_SOURCE=200809L -D_BSD_SOURCE
+	CFLAGS  += -D_POSIX_C_SOURCE=200809L -D_BSD_SOURCE
 	LIBS    += -ldl
 	LDFLAGS += -Wl,-E
 else ifeq ($(TARGET), freebsd)
@@ -36,6 +36,28 @@ LDFLAGS += -L$(LDIR)
 
 all: $(BIN)
 
+srcdir=.
+
+$(srcdir)/configure: configure.ac
+	cd '$(srcdir)' && autoconf
+
+# autoheader might not change config.h.in, so touch a stamp file.
+$(srcdir)/config.h.in: stamp-h.in
+$(srcdir)/stamp-h.in: configure.ac
+	cd '$(srcdir)' && autoheader
+	echo timestamp > '$(srcdir)/stamp-h.in'
+
+src/config.h: stamp-h
+stamp-h: config.h.in config.status
+		 ./config.status
+
+Makefile: Makefile.in config.status
+		 ./config.status
+
+config.status: configure
+		 ./config.status --recheck
+
+
 clean:
 	$(RM) $(BIN) obj/*
 	@$(MAKE) -C deps/luajit clean
@@ -44,7 +66,7 @@ $(BIN): $(OBJ)
 	@echo LINK $(BIN)
 	@$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-$(OBJ): config.h Makefile $(LDIR)/libluajit.a | $(ODIR)
+$(OBJ): src/config.h Makefile $(LDIR)/libluajit.a | $(ODIR)
 
 $(ODIR):
 	@mkdir -p $@
