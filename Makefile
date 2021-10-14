@@ -1,5 +1,11 @@
-CFLAGS  := $(CFLAGS) -std=c99 -Wall -O2 -D_REENTRANT
-LIBS    := $(LIBS) -lpthread -lm -lcrypto -lssl
+ifeq ($(V),1)
+    override V=
+else
+	override V=@
+endif
+
+CFLAGS  := $(CFLAGS) -std=c99 -Wall -O2 -D_REENTRANT -I/home/tbarbette/workspace/picotls/include/ -I/home/tbarbette/workspace/picoquic/picoquic/
+LIBS    := $(LIBS) -lpthread -lm -lcrypto -lssl -lpicoquic-core -lpicoquic-log -lpicotls-core -lpicotls-openssl -lpicotls-fusion
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
@@ -32,7 +38,7 @@ OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o
 LDIR     = deps/luajit/src
 LIBS    := -lluajit $(LIBS)
 CFLAGS  += -I$(LDIR)
-LDFLAGS += -L$(LDIR)
+LDFLAGS += -L$(LDIR) -L/home/tbarbette/workspace/picotls/ -L/home/tbarbette/workspace/picoquic/
 
 all: $(BIN)
 
@@ -64,7 +70,7 @@ clean:
 
 $(BIN): $(OBJ)
 	@echo LINK $(BIN)
-	@$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(V)$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(OBJ): src/config.h Makefile $(LDIR)/libluajit.a | $(ODIR)
 
@@ -77,7 +83,7 @@ $(ODIR)/bytecode.o: src/wrk.lua
 
 $(ODIR)/%.o : %.c
 	@echo CC $<
-	@$(CC) $(CFLAGS) -c -o $@ $<
+	$(V)$(CC) $(CFLAGS) -c -o $@ $<
 
 $(LDIR)/libluajit.a:
 	@echo Building LuaJIT...

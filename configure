@@ -4468,6 +4468,7 @@ fi
 quiclibs=
 tlslibs=
 
+save_LIBS="$LIBS"
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ptls_calc_hash in -lpicotls-core" >&5
 $as_echo_n "checking for ptls_calc_hash in -lpicotls-core... " >&6; }
 if ${ac_cv_lib_picotls_core_ptls_calc_hash+:} false; then :
@@ -4508,6 +4509,11 @@ if test "x$ac_cv_lib_picotls_core_ptls_calc_hash" = xyes; then :
   have_tls=yes
 fi
 
+if test "$have_tls" = "yes"; then
+    tlslibs="-lpicotls-core -lpicotls-openssl"
+fi
+
+LIBS="$tlslibs $save_LIBS"
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ptls_fusion_aesgcm_encrypt in -lpicotls-fusion" >&5
 $as_echo_n "checking for ptls_fusion_aesgcm_encrypt in -lpicotls-fusion... " >&6; }
@@ -4550,16 +4556,12 @@ if test "x$ac_cv_lib_picotls_fusion_ptls_fusion_aesgcm_encrypt" = xyes; then :
 fi
 
 
-if test "$have_tls" = "yes"; then
-    tlslibs="-lpicotls-core -lpicotls-openssl"
-fi
-
 if test "$have_fusion" = "yes"; then
     tlslibs="$tlslibs -lpicotls-fusion"
 fi
 
-save_LIBS="$LIBS"
-LIBS="$tlslibs $LIBS"
+LIBS="$tlslibs $save_LIBS"
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for picoquic_create in -lpicoquic-core" >&5
 $as_echo_n "checking for picoquic_create in -lpicoquic-core... " >&6; }
 if ${ac_cv_lib_picoquic_core_picoquic_create+:} false; then :

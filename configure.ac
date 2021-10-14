@@ -51,20 +51,22 @@ AC_CHECK_TYPES([ptrdiff_t])
 quiclibs=
 tlslibs=
 
+save_LIBS="$LIBS"
 AC_CHECK_LIB([picotls-core],[ptls_calc_hash], [have_tls=yes])
-
-AC_CHECK_LIB([picotls-fusion],[ptls_fusion_aesgcm_encrypt],[have_fusion=yes])
-
 if test "$have_tls" = "yes"; then
     tlslibs="-lpicotls-core -lpicotls-openssl"
 fi
+
+LIBS="$tlslibs $save_LIBS"
+
+AC_CHECK_LIB([picotls-fusion],[ptls_fusion_aesgcm_encrypt],[have_fusion=yes])
 
 if test "$have_fusion" = "yes"; then
     tlslibs="$tlslibs -lpicotls-fusion"
 fi
 
-save_LIBS="$LIBS"
-LIBS="$tlslibs $LIBS"
+LIBS="$tlslibs $save_LIBS"
+
 AC_CHECK_LIB([picoquic-core],[picoquic_create],[have_picoquic=yes])
 if test "$have_picoquic" = "yes"; then
     quiclibs="-lpicoquic-core -lpicoquic-log"
