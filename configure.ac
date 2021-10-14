@@ -51,11 +51,13 @@ AC_CHECK_TYPES([ptrdiff_t])
 quiclibs=
 tlslibs=
 
-AC_CHECK_LIB([picotls-core],[ptls_calc_hash])
+AC_CHECK_LIB([picotls-core],[ptls_calc_hash], [have_tls=yes])
 
 AC_CHECK_LIB([picotls-fusion],[ptls_fusion_aesgcm_encrypt],[have_fusion=yes])
 
-tlslibs="-lpicotls-core -lpicotls-openssl"
+if test "$have_tls" = "yes"; then
+    tlslibs="-lpicotls-core -lpicotls-openssl"
+fi
 
 if test "$have_fusion" = "yes"; then
     tlslibs="$tlslibs -lpicotls-fusion"

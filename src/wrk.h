@@ -11,7 +11,9 @@
 #include <netinet/in.h>
 #include <math.h>
 
+#if HAVE_QUIC
 #include <picoquic.h>
+#endif
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -50,7 +52,9 @@ typedef struct {
     lua_State *L;
     errors errors;
     struct connection *cs;
+#if HAVE_QUIC
     picoquic_quic_t *quic;
+#endif
     char* alpn;
 } thread;
 
@@ -70,7 +74,9 @@ typedef struct connection {
     struct in_addr bind;
     union {
             SSL *ssl;
+#if HAVE_QUIC
             picoquic_cnx_t* cnx;
+#endif
     };
     double throughput;
     double catch_up_throughput;
@@ -110,7 +116,7 @@ typedef struct proto {
 } proto;
 
 
-struct http_parser_settings parser_settings;
+extern struct http_parser_settings parser_settings;
 
 static uint64_t time_us() {
     struct timespec t;

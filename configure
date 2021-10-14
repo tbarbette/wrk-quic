@@ -4505,12 +4505,7 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_picotls_core_ptls_calc_hash" >&5
 $as_echo "$ac_cv_lib_picotls_core_ptls_calc_hash" >&6; }
 if test "x$ac_cv_lib_picotls_core_ptls_calc_hash" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBPICOTLS_CORE 1
-_ACEOF
-
-  LIBS="-lpicotls-core $LIBS"
-
+  have_tls=yes
 fi
 
 
@@ -4555,7 +4550,9 @@ if test "x$ac_cv_lib_picotls_fusion_ptls_fusion_aesgcm_encrypt" = xyes; then :
 fi
 
 
-tlslibs="-lpicotls-core -lpicotls-openssl"
+if test "$have_tls" = "yes"; then
+    tlslibs="-lpicotls-core -lpicotls-openssl"
+fi
 
 if test "$have_fusion" = "yes"; then
     tlslibs="$tlslibs -lpicotls-fusion"

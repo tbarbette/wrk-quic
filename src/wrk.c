@@ -33,6 +33,8 @@ static struct config {
 } cfg;
 
 
+struct http_parser_settings parser_settings;
+
 static uint64_t usec_to_next_send(connection *c) {
     uint64_t now = time_us();
 
@@ -171,10 +173,14 @@ static void usage() {
            "    -d, --duration    <T>  Duration of test           \n"
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
+#if HAVE_QUIC
            "    -q, --quic             Use QUIC transport instead of TCP\n"
+#endif
            "    -p, --http             HTTP Version (09,10 or 11) \n"
+#if HAVE_QUIC
            "                           -1 use the sample server   \n"
            "                           picoquic mechanism.        \n"
+#endif
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
            "    -L  --latency          Print latency statistics   \n"
@@ -211,6 +217,7 @@ int main(int argc, char **argv) {
     char *service = port ? port : schema;
 
     sock.writeable = sock_writeable;
+#if HAVE_QUIC
     if (cfg.proto == &quic_proto) {
         //Quic handles everything on its own
         sock.connect  = 0;
@@ -219,7 +226,9 @@ int main(int argc, char **argv) {
         sock.write    = 0;
         sock.readable = 0;
         sock.writeable = 0;
-    } else if (!strncmp("https", schema, 5)) {
+    } else
+#endif
+    if (!strncmp("https", schema, 5)) {
         if ((cfg.ctx = ssl_init()) == NULL) {
             fprintf(stderr, "unable to initialize SSL\n");
             ERR_print_errors_fp(stderr);
@@ -413,7 +422,7 @@ void *thread_main(void *arg) {
     }
 
     double throughput = (thread->throughput / 1000000.0) / thread->connections;
-
+#if HAVE_QUIC
     if (cfg.proto == &quic_proto) {
         if (cfg.http_version < 0)
             thread->alpn = ALPN_SAMPLE_SERVER;
@@ -426,7 +435,7 @@ void *thread_main(void *arg) {
             exit(1);
         }
     }
-
+#endif
     connection *c = thread->cs;
 
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
@@ -751,7 +760,9 @@ static struct option longopts[] = {
     { "version",        no_argument,       NULL, 'v' },
     { "rate",           required_argument, NULL, 'R' },
     { "raw",         no_argument,       NULL, 'r' },
+#if HAVE_QUIC
     { "quic",           no_argument,        NULL, 'q' },
+#endif
     { "http",           required_argument,        NULL, 'p' },
     { NULL,             0,                 NULL,  0  }
 };
@@ -779,9 +790,11 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'c':
                 if (scan_metric(optarg, &cfg->connections)) return -1;
                 break;
+#if HAVE_QUIC
             case 'q':
                 cfg->proto = &quic_proto;
                 break;
+#endif
             case 'd':
                 if (scan_time(optarg, &cfg->duration)) return -1;
                 break;
