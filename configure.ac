@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([WRK3], 1.0)
+AC_INIT([WRKMP], 1.0)
 
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
