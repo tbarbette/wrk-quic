@@ -621,6 +621,7 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+PREFIX
 QUICLIBS
 TLSLIBS
 EGREP
@@ -678,7 +679,8 @@ PACKAGE_VERSION
 PACKAGE_TARNAME
 PACKAGE_NAME
 PATH_SEPARATOR
-SHELL'
+SHELL
+am__quote'
 ac_subst_files=''
 ac_user_opts='
 enable_option_checking
@@ -4616,6 +4618,8 @@ LIBS="$save_LIBS"
 TLSLIBS=$tlslibs
 
 QUICLIBS=$quiclibs
+
+PREFIX=$prefix
 
 
 # Checks for library functions.

@@ -1,3 +1,7 @@
+ifeq ($(prefix),)
+    prefix := @prefix@
+endif
+
 ifeq ($(V),1)
     override V=
 else
@@ -55,14 +59,20 @@ $(srcdir)/stamp-h.in: configure.ac
 
 src/config.h: stamp-h
 stamp-h: config.h.in config.status
-		 ./config.status
+	./config.status
 
 Makefile: Makefile.in config.status
-		 ./config.status
+	./config.status
 
 config.status: configure
-		 ./config.status --recheck
+	./config.status --recheck
 
+install: wrk
+	install -d $(DESTDIR)$(prefix)/bin
+	install -m 755 $< $(DESTDIR)$(prefix)/bin/wrk
+
+uninstall:
+	rm -f $(DESTDIR)$(prefix)/bin/mygame
 
 clean:
 	$(RM) $(BIN) obj/*
@@ -89,7 +99,7 @@ $(LDIR)/libluajit.a:
 	@echo Building LuaJIT...
 	@$(MAKE) -C $(LDIR) BUILDMODE=static
 
-.PHONY: all clean
+.PHONY: all clean uninstall
 .SUFFIXES:
 .SUFFIXES: .c .o .lua
 

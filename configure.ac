@@ -79,6 +79,7 @@ LIBS="$save_LIBS"
 
 AC_SUBST(TLSLIBS, $tlslibs)
 AC_SUBST(QUICLIBS, $quiclibs)
+AC_SUBST(PREFIX, $prefix)
 
 # Checks for library functions.
 AC_FUNC_ERROR_AT_LINE
