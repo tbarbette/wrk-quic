@@ -1,5 +1,6 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 
+#define _GNU_SOURCE
 #include "wrk.h"
 #include "script.h"
 #include "main.h"
@@ -18,6 +19,7 @@ static struct config {
     uint64_t rate;
     uint64_t delay_ms;
     in_addr_t bind;
+    bool     affinity;
     bool     latency;
     bool     u_latency;
     bool     dynamic;
@@ -57,6 +59,7 @@ static void usage() {
            "    -c, --connections <N>  Connections to keep open   \n"
            "    -d, --duration    <T>  Duration of test           \n"
            "    -t, --threads     <N>  Number of threads to use   \n"
+           "    -a, --affinity         Affinitize threads to CPUs \n"
            "                                                      \n"
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
@@ -82,6 +85,7 @@ static void usage() {
 int main(int argc, char **argv) {
     char *url, **headers = zmalloc(argc * sizeof(char *));
     struct http_parser_url parts = {};
+    cpu_set_t cpuset;
 
     if (parse_args(&cfg, &url, &parts, headers, argc, argv)) {
         usage();
@@ -153,6 +157,12 @@ int main(int argc, char **argv) {
             char *msg = strerror(errno);
             fprintf(stderr, "unable to create thread %"PRIu64": %s\n", i, msg);
             exit(2);
+        }
+
+        if (cfg.affinity) {
+            CPU_ZERO(&cpuset);
+            CPU_SET(i, &cpuset);
+            pthread_setaffinity_np(t, sizeof(cpuset), &cpuset);
         }
     }
 
@@ -717,6 +727,7 @@ static struct option longopts[] = {
     { "connections",    required_argument, NULL, 'c' },
     { "duration",       required_argument, NULL, 'd' },
     { "threads",        required_argument, NULL, 't' },
+    { "affinity",       no_argument,       NULL, 'a' },
     { "script",         required_argument, NULL, 's' },
     { "header",         required_argument, NULL, 'H' },
     { "latency",        no_argument,       NULL, 'L' },
@@ -736,6 +747,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
 
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
+    cfg->affinity    = 0;
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
@@ -744,7 +756,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->rate        = 0;
     cfg->record_all_responses = true;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:b:T:R:LUBrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:b:T:R:LUBrav?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -763,6 +775,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 'L':
                 cfg->latency = true;
+                break;
+            case 'a':
+                cfg->affinity = true;
                 break;
             case 'b':
                 cfg->bind = inet_addr(optarg);
