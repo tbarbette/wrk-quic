@@ -60,6 +60,10 @@ function wrk.format(method, path, headers, body)
 
    headers["Content-Length"] = body and string.len(body)
 
+   if not headers["Connection"] then
+       headers["Connection"] = "close"
+   end
+
    s[1] = string.format("%s %s HTTP/1.1", method, path)
    for name, value in pairs(headers) do
       s[#s+1] = string.format("%s: %s", name, value)
