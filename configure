@@ -684,6 +684,8 @@ am__quote'
 ac_subst_files=''
 ac_user_opts='
 enable_option_checking
+with_picotls
+with_picoquic
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1312,6 +1314,12 @@ if test -n "$ac_init_help"; then
      short | recursive ) echo "Configuration of WRKMP 1.0:";;
    esac
   cat <<\_ACEOF
+
+Optional Packages:
+  --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
+  --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
+  --with-picotls          location of picotls, if not installed globally
+  --with-picoquic         location of picoquic, if not installed globally
 
 Some influential environment variables:
   CXX         C++ compiler command
@@ -4470,6 +4478,18 @@ fi
 quiclibs=
 tlslibs=
 
+
+
+# Check whether --with-picotls was given.
+if test "${with_picotls+set}" = set; then :
+  withval=$with_picotls;
+else
+  with_picotls=../picotls/
+fi
+
+
+LDFLAGS="-L$with_picotls $LDFLAGS"
+
 save_LIBS="$LIBS"
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ptls_calc_hash in -lpicotls-core" >&5
 $as_echo_n "checking for ptls_calc_hash in -lpicotls-core... " >&6; }
@@ -4563,6 +4583,18 @@ if test "$have_fusion" = "yes"; then
 fi
 
 LIBS="$tlslibs $save_LIBS"
+
+
+# Check whether --with-picoquic was given.
+if test "${with_picoquic+set}" = set; then :
+  withval=$with_picoquic;
+else
+  with_picoquic=../picoquic/
+fi
+
+
+LDFLAGS="-L$with_picoquic $LDFLAGS"
+CFLAGS="-I$with_picoquic/picoquic/ $CFLAGS"
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for picoquic_create in -lpicoquic-core" >&5
 $as_echo_n "checking for picoquic_create in -lpicoquic-core... " >&6; }

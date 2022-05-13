@@ -51,6 +51,14 @@ AC_CHECK_TYPES([ptrdiff_t])
 quiclibs=
 tlslibs=
 
+
+AC_ARG_WITH([picotls],
+            [AS_HELP_STRING([--with-picotls], [location of picotls, if not installed globally])],
+            [],
+            [with_picotls=../picotls/])
+
+LDFLAGS="-L$with_picotls $LDFLAGS"
+
 save_LIBS="$LIBS"
 AC_CHECK_LIB([picotls-core],[ptls_calc_hash], [have_tls=yes])
 if test "$have_tls" = "yes"; then
@@ -66,6 +74,14 @@ if test "$have_fusion" = "yes"; then
 fi
 
 LIBS="$tlslibs $save_LIBS"
+
+AC_ARG_WITH([picoquic],
+            [AS_HELP_STRING([--with-picoquic], [location of picoquic, if not installed globally])],
+            [],
+            [with_picoquic=../picoquic/])
+
+LDFLAGS="-L$with_picoquic $LDFLAGS"
+CFLAGS="-I$with_picoquic/picoquic/ $CFLAGS"
 
 AC_CHECK_LIB([picoquic-core],[picoquic_create],[have_picoquic=yes])
 if test "$have_picoquic" = "yes"; then
