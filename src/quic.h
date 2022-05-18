@@ -4,7 +4,7 @@
 
 #include <sys/ioctl.h>
 
-char* ALPN_HQ = "hq";
+char* ALPN_HQ = "hq-interop";
 char* ALPN_SAMPLE_SERVER = "picoquic_sample";
 
 #define DEBUG 0
