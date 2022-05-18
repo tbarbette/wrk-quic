@@ -115,6 +115,29 @@ typedef struct proto {
    reconnect_t reconnect;
 } proto;
 
+struct config {
+    uint64_t threads;
+    uint64_t connections;
+    uint64_t duration;
+    uint64_t timeout;
+    uint64_t pipeline;
+    uint64_t rate;
+    uint64_t delay_ms;
+    in_addr_t bind;
+    bool     latency;
+    bool     u_latency;
+    bool     dynamic;
+    bool     record_all_responses;
+    bool     raw;
+    char    *host;
+    char    *script;
+    int     http_version;
+    proto   *proto;
+    SSL_CTX *ctx;
+};
+
+extern struct config cfg;
+
 
 extern struct http_parser_settings parser_settings;
 
@@ -126,5 +149,46 @@ static uint64_t time_us() {
 
 int delay_request(aeEventLoop *loop, long long id, void *data);
 void stats_request_completed(connection* c);
+
+static uint64_t usec_to_next_send(connection *c) {
+    uint64_t now = time_us();
+
+    uint64_t next_start_time = c->thread_start + (c->complete / c->throughput);
+
+    bool send_now = true;
+
+    if (next_start_time > now) {
+        // We are on pace. Indicate caught_up and don't send now.
+        c->caught_up = true;
+        send_now = false;
+    } else {
+        // We are behind
+        if (c->caught_up) {
+            // This is the first fall-behind since we were last caught up
+            c->caught_up = false;
+            c->catch_up_start_time = now;
+            c->complete_at_catch_up_start = c->complete;
+        }
+
+        // Figure out if it's time to send, per catch up throughput:
+        uint64_t complete_since_catch_up_start =
+                c->complete - c->complete_at_catch_up_start;
+
+        next_start_time = c->catch_up_start_time +
+                (complete_since_catch_up_start / c->catch_up_throughput);
+
+        if (next_start_time > now) {
+            // Not yet time to send, even at catch-up throughout:
+            send_now = false;
+        }
+    }
+
+    if (send_now) {
+        c->latest_should_send_time = now;
+        c->latest_expected_start = next_start_time;
+    }
+
+    return send_now ? 0 : (next_start_time - now);
+}
 
 #endif /* WRK_H */

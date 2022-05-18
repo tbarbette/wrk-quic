@@ -88,6 +88,7 @@ if test "$have_picoquic" = "yes"; then
     quiclibs="-lpicoquic-core -lpicoquic-log"
 
     AC_DEFINE([HAVE_QUIC],[1],[Have QUIC support])
+    AC_SUBST([HAVE_QUIC],[1])
 else
     echo "WARNING! Picoquic was not found! Did you 'make install' it?"
 fi

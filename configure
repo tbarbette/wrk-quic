@@ -624,6 +624,7 @@ LIBOBJS
 PREFIX
 QUICLIBS
 TLSLIBS
+HAVE_QUIC
 EGREP
 GREP
 CPP
@@ -4641,6 +4642,8 @@ if test "$have_picoquic" = "yes"; then
 
 
 $as_echo "#define HAVE_QUIC 1" >>confdefs.h
+
+    HAVE_QUIC=1
 
 else
     echo "WARNING! Picoquic was not found! Did you 'make install' it?"

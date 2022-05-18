@@ -34,6 +34,11 @@ endif
 
 SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
 		ae.c zmalloc.c http_parser.c tinymt64.c hdr_histogram.c
+
+ifeq (@HAVE_QUIC@,1)
+    SRC := ${SRC} quic.c
+endif
+
 BIN  := wrk
 
 ODIR := obj
