@@ -124,6 +124,7 @@ struct config {
     uint64_t rate;
     uint64_t delay_ms;
     in_addr_t bind;
+    int      affinity;
     bool     latency;
     bool     u_latency;
     bool     dynamic;
