@@ -9,7 +9,7 @@ else
 endif
 
 CFLAGS  := $(CFLAGS) -std=c99 -Wall -O2 -D_REENTRANT @CFLAGS@
-LIBS    := $(LIBS) -lpthread -lm -lcrypto -lssl @QUICLIBS@ @TLSLIBS@
+LIBS    := $(LIBS) -lpthread -lm -lcrypto -lssl @QUICLIBS@ @TLSLIBS@ @RAPIDOLIBS@
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
@@ -37,6 +37,10 @@ SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
 
 ifeq (@HAVE_QUIC@,1)
     SRC := ${SRC} quic.c
+endif
+
+ifeq (@HAVE_RAPIDO@,1)
+    SRC := ${SRC} rapido.c
 endif
 
 BIN  := wrk

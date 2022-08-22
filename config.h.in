@@ -48,6 +48,9 @@
 /* Have QUIC support */
 #undef HAVE_QUIC
 
+/* Have RAPIDO support */
+#undef HAVE_RAPIDO
+
 /* Define to 1 if you have the <stddef.h> header file. */
 #undef HAVE_STDDEF_H
 

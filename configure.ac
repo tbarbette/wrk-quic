@@ -50,7 +50,7 @@ AC_CHECK_TYPES([ptrdiff_t])
 
 quiclibs=
 tlslibs=
-
+rapidolibs=
 
 AC_ARG_WITH([picotls],
             [AS_HELP_STRING([--with-picotls], [location of picotls, if not installed globally])],
@@ -92,8 +92,27 @@ if test "$have_picoquic" = "yes"; then
 else
     echo "WARNING! Picoquic was not found! Did you 'make install' it?"
 fi
+
+AC_ARG_WITH([rapido],
+            [AS_HELP_STRING([--with-rapido], [location of rapido, if not installed globally])],
+            [],
+            [with_rapido=../rapido/])
+
+LDFLAGS="-L$with_rapido $LDFLAGS"
+
+AC_CHECK_LIB([picotls-rapido],[rapido_new_server],[have_rapido=yes])
+if test "$have_rapido" = "yes"; then
+    rapidolibs="-lpicotls-rapido"
+
+    AC_DEFINE([HAVE_RAPIDO],[1],[Have RAPIDO support])
+    AC_SUBST([HAVE_RAPIDO],[1])
+else
+    echo "INFO: Rapido was not found, support is not activated."
+fi
 LIBS="$save_LIBS"
 
+
+AC_SUBST(RAPIDOLIBS, $rapidolibs)
 AC_SUBST(TLSLIBS, $tlslibs)
 AC_SUBST(QUICLIBS, $quiclibs)
 AC_SUBST(PREFIX, $prefix)

@@ -183,6 +183,18 @@ int main(int argc, char **argv) {
         sock.write    = ssl_write;
         sock.readable = ssl_readable;
     }
+    else if (!strncmp("rapido", schema, 5)) {
+        if ((cfg.ctx = rapido_init()) == NULL) {
+            fprintf(stderr, "unable to initialize RAPIDO\n");
+            ERR_print_errors_fp(stderr);
+            exit(1);
+        }
+        sock.connect  = rapido_connect;
+        sock.close    = rapido_close;
+        sock.read     = rapido_read;
+        sock.write    = rapido_write;
+        sock.readable = rapido_readable;
+    }
 	
     cfg.host = host;
 	

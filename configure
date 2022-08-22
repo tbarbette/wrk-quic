@@ -624,6 +624,8 @@ LIBOBJS
 PREFIX
 QUICLIBS
 TLSLIBS
+RAPIDOLIBS
+HAVE_RAPIDO
 HAVE_QUIC
 EGREP
 GREP
@@ -687,6 +689,7 @@ ac_user_opts='
 enable_option_checking
 with_picotls
 with_picoquic
+with_rapido
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1321,6 +1324,7 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-picotls          location of picotls, if not installed globally
   --with-picoquic         location of picoquic, if not installed globally
+  --with-rapido           location of rapido, if not installed globally
 
 Some influential environment variables:
   CXX         C++ compiler command
@@ -4478,7 +4482,7 @@ fi
 
 quiclibs=
 tlslibs=
-
+rapidolibs=
 
 
 # Check whether --with-picotls was given.
@@ -4648,7 +4652,73 @@ $as_echo "#define HAVE_QUIC 1" >>confdefs.h
 else
     echo "WARNING! Picoquic was not found! Did you 'make install' it?"
 fi
+
+
+# Check whether --with-rapido was given.
+if test "${with_rapido+set}" = set; then :
+  withval=$with_rapido;
+else
+  with_rapido=../rapido/
+fi
+
+
+LDFLAGS="-L$with_rapido $LDFLAGS"
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for rapido_new_server in -lpicotls-rapido" >&5
+$as_echo_n "checking for rapido_new_server in -lpicotls-rapido... " >&6; }
+if ${ac_cv_lib_picotls_rapido_rapido_new_server+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lpicotls-rapido  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char rapido_new_server ();
+int
+main ()
+{
+return rapido_new_server ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_picotls_rapido_rapido_new_server=yes
+else
+  ac_cv_lib_picotls_rapido_rapido_new_server=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_picotls_rapido_rapido_new_server" >&5
+$as_echo "$ac_cv_lib_picotls_rapido_rapido_new_server" >&6; }
+if test "x$ac_cv_lib_picotls_rapido_rapido_new_server" = xyes; then :
+  have_rapido=yes
+fi
+
+if test "$have_rapido" = "yes"; then
+    rapidolibs="-lpicotls-rapido"
+
+
+$as_echo "#define HAVE_RAPIDO 1" >>confdefs.h
+
+    HAVE_RAPIDO=1
+
+else
+    echo "INFO: Rapido was not found, support is not activated."
+fi
 LIBS="$save_LIBS"
+
+
+RAPIDOLIBS=$rapidolibs
 
 TLSLIBS=$tlslibs
 
