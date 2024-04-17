@@ -21,7 +21,7 @@ sudo make install
 
 ## Support for QUIC
 
-To support QUIC, you must have [https://github.com/private-octopus/picoquic](picoquic) installed first.
+To support QUIC, you must have [https://github.com/private-octopus/picoquic](https://github.com/private-octopus/picoquic) installed first.
 ```
 git clone https://github.com/private-octopus/picoquic.git
 cmake -DPICOQUIC_FETCH_PTLS=Y .
