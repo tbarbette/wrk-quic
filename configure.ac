@@ -75,6 +75,15 @@ fi
 
 LIBS="$tlslibs $save_LIBS"
 
+AC_CHECK_LIB([picotls-minicrypto],[ptls_minicrypto_random_bytes],[have_minicrypto=yes])
+
+if test "$have_minicrypto" = "yes"; then
+    tlslibs="$tlslibs -lpicotls-minicrypto"
+fi
+
+LIBS="$tlslibs $save_LIBS"
+
+
 AC_ARG_WITH([picoquic],
             [AS_HELP_STRING([--with-picoquic], [location of picoquic, if not installed globally])],
             [],
