@@ -15,6 +15,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: picotls
       run: |
+        pushd ..
         git clone https://github.com/huitema/picotls.git
         cd picotls
         git submodule init
@@ -22,19 +23,19 @@ jobs:
         cmake .
         make
         cd ..
+        popd
     - name: picoquic
       run: |
+        pushd ..
         git clone https://github.com/private-octopus/picoquic.git
         cd picoquic
         cmake .
         make
-        make DESTDIR=$(pwd)/../ install
-         cd ..
+        cd ..
+        popd
     - name: build
       run: |
         ./autogen.sh
-        export LD_LIBRARY_PATH=$(pwd)/usr/local/lib/:$(pwd)/picoquic/:$LD_LIBRARY_PATH
-        ls usr/local/
-        ls usr/local/lib
-        ./configure "CFLAGS=-I$(pwd)/usr/local/include/ -I$(pwd)/picoquic/picoquic/" "LDFLAGS=-L$(pwd)/picoquic/"
+        ./configure
         make
+        grep HAVE_QUIC config.status
