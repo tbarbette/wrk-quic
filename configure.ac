@@ -99,7 +99,7 @@ if test "$have_picoquic" = "yes"; then
     AC_DEFINE([HAVE_QUIC],[1],[Have QUIC support])
     AC_SUBST([HAVE_QUIC],[1])
 else
-    echo "WARNING! Picoquic was not found! Did you 'make install' it?"
+    echo "WARNING! Picoquic was not found! Is it built in ../picoquic?"
 fi
 LIBS="$save_LIBS"
 
