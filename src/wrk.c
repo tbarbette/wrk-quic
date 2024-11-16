@@ -621,7 +621,8 @@ static int response_complete(http_parser *parser) {
 }
 
 static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
-    printf("Socket connected\n!");
+    if (cfg.verbose)
+        printf("Socket connected!\n");
     connection *c = data;
     eagain:
     switch (sock.connect(c, cfg.host)) {
