@@ -130,6 +130,7 @@ struct config {
     bool     dynamic;
     bool     record_all_responses;
     bool     raw;
+    bool    verbose;
     char    *host;
     char    *script;
     int     http_version;

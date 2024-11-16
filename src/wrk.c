@@ -133,6 +133,7 @@ static void usage() {
            "                           (as opposed to each op)    \n"
            "    -v, --version          Print version details      \n"
            "        --raw              No human-readable unit     \n"
+           "    -V, --verbose          Be verbose about requests  \n"
            "    -b, --bind       <IP>  Establish connection from a\n"
            "                             given address            \n"
            "    -R, --rate        <T>  work rate (throughput)     \n"
@@ -584,7 +585,9 @@ static int response_complete(http_parser *parser) {
     connection *c = parser->data;
     thread *thread = c->thread;
     int status = parser->status_code;
-    printf("Response complete\n");
+
+    if (cfg.verbose)
+        printf("Response complete\n");
 
     if (status > 399) {
         thread->errors.status++;
@@ -605,8 +608,8 @@ static int response_complete(http_parser *parser) {
     stats_request_completed(c);
 
     if (!http_should_keep_alive(parser)) {
-
-        fprintf(stderr, "Request complete, reconnecting\n");
+        if (cfg.verbose)
+            fprintf(stderr, "Request complete, reconnecting\n");
         cfg.proto->reconnect(thread, c);
         goto done;
     }
@@ -734,8 +737,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->record_all_responses = true;
     cfg->proto = &tcp_proto;
     cfg->http_version = 11;
+    cfg->verbose     = 0;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:b:T:R:p:LUBrqav?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:b:T:R:p:LUBrqaVv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -784,9 +788,12 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'R':
                 if (scan_metric(optarg, &cfg->rate)) return -1;
                 break;
+            case 'V':
+                cfg->verbose = 1;
+                break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
-                printf("Copyright (C) 2012 Will Glozer\n");
+                printf("Copyright (C) 2012 Will Glozer, 2020-2024 Tom Barbette\n");
                 break;
             case 'h':
             case '?':
